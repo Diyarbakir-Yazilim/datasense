@@ -1,0 +1,121 @@
+# ─── DataSense CI/CD Pipeline ────────────────────────────────────
+# GitHub Actions ile test, lint ve Docker build otomasyonu
+
+name: DataSense CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+jobs:
+  # ─── Backend Testleri ──────────────────────────────────────────
+  backend-test:
+    name: 🐍 Backend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python kurulumu
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Bağımlılıkları yükle
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Lint kontrolü
+        run: |
+          pip install ruff
+          ruff check app/
+
+      - name: Testleri çalıştır
+        run: pytest tests/ -v --tb=short
+        continue-on-error: true
+
+  # ─── AI API Testleri ───────────────────────────────────────────
+  ai-api-test:
+    name: 🤖 AI API Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./ai_api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python kurulumu
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Bağımlılıkları yükle
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Lint kontrolü
+        run: |
+          pip install ruff
+          ruff check .
+
+      - name: Testleri çalıştır
+        run: pytest tests/ -v --tb=short
+        continue-on-error: true
+
+  # ─── Frontend Testleri ─────────────────────────────────────────
+  frontend-test:
+    name: ⚛️ Frontend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js kurulumu
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Bağımlılıkları yükle
+        run: npm install
+
+      - name: Lint kontrolü
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build kontrolü
+        run: npm run build
+
+  # ─── Docker Build ──────────────────────────────────────────────
+  docker-build:
+    name: 🐳 Docker Build
+    runs-on: ubuntu-latest
+    needs: [backend-test, ai-api-test, frontend-test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker Compose kontrolü
+        run: docker compose config
+
+      - name: Docker imajlarını build et
+        run: docker compose build
+        continue-on-error: true
