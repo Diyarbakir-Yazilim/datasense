@@ -1,0 +1,98 @@
+# ─── DataSense Docker Compose ────────────────────────────────────
+# Tam asenkron yapıyı (Backend, Worker, Redis, Frontend) başlatma
+# Kullanım: docker-compose up --build
+
+version: "3.9"
+
+services:
+  # ─── Redis (Mesaj Kuyruğu & Sonuç Deposu) ─────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: datasense_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ─── Backend API (FastAPI) ─────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: datasense_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - AI_API_URL=http://ai_api:8001
+      - UPLOAD_DIR=/app/uploads
+      - DEBUG=false
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - upload_data:/app/uploads
+    restart: unless-stopped
+
+  # ─── Celery Worker (Asenkron Görev İşleyici) ──────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: datasense_worker
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2 -Q datasense_queue
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - AI_API_URL=http://ai_api:8001
+      - UPLOAD_DIR=/app/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    volumes:
+      - upload_data:/app/uploads
+    restart: unless-stopped
+
+  # ─── AI API (Veri/Karar Motoru) ────────────────────────────────
+  ai_api:
+    build:
+      context: ./ai_api
+      dockerfile: Dockerfile
+    container_name: datasense_ai_api
+    ports:
+      - "8001:8001"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4}
+    restart: unless-stopped
+
+  # ─── Frontend (React + Vite) ───────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: datasense_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+    driver: local
+  upload_data:
+    driver: local
