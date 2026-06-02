@@ -1,0 +1,6 @@
+id,product_name,price,sale_date,is_active
+1,Laptop,1200.50,2026-01-15,True
+2,Mouse,25.00,,True
+3,Keyboard,,2026-02-10,False
+4,Monitor,350.00,2026-03-01,
+5,Headphones,99.90,2026-03-15,True
