@@ -1,6 +1,6 @@
 # DataSense Backend - Main
 # TODO: FastAPI uygulama başlatma eklenecek
-# DataSense Backend - Main
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.config import settings
