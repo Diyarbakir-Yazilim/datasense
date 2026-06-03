@@ -32,16 +32,36 @@ class DataLoader:
 
     def _load_csv(self) -> pl.LazyFrame:
         """
-        Scans the CSV file without loading it entirely into memory.
-        Enables downstream optimizations and streaming capabilities.
+        Scans the CSV file and executes a strict baseline quality check.
         """
-        # infer_schema_length=0 forces Polars to skip data type guessing and read everything as String safely.
-        # encoding="iso-8859-1" handles special western/european symbols smoothly.
-        return pl.scan_csv(
+        lf = pl.scan_csv(
             self.file_path,
             encoding="utf8-lossy",
             infer_schema_length=0
         )
+
+        # --- BASELINE QUALITY CHECK ---
+        total_rows = lf.select(pl.len()).collect().item()
+
+        # Stop execution if the file is empty or contains only headers
+        if total_rows <= 5:
+            raise ValueError("The uploaded file is empty or does not contain enough data rows to process.")
+        
+        # Calculate global null density to filter out corrupted/empty datasets
+        schema = lf.collect_schema()
+        null_counts_query = lf.select([pl.col(col).null_count() for col in schema.keys()])
+        null_counts_df = null_counts_query.collect()
+
+        total_nulls = sum([null_counts_df.get_column(col).item() for col in schema.keys()])
+        total_cells = total_rows * len(schema.keys())
+
+        null_ratio = total_nulls / total_cells if total_cells > 0 else 1.0
+
+        # Reject the file if more than 10% of the dataset is missing
+        if null_ratio > 0.30:
+            raise ValueError(f"Dataset rejection: {round(null_ratio*100)}% of the file contains missing values.")
+        
+        return lf
 
     def _load_excel(self) -> pl.LazyFrame:
         """
@@ -52,16 +72,48 @@ class DataLoader:
         temp_csv_path = self.file_path.replace(self.file_ext, "_temp.csv")
         
         # Reads the Excel file using high-performance underlying engines (e.g., fastexcel/calamine).
-        df_excel = pl.read_excel(self.file_path)
-        df_excel.write_csv(temp_csv_path)
-        
+        try:
+            df_excel = pl.read_excel(self.file_path, engine="calamine")
+            df_excel.write_csv(temp_csv_path)
 
-        return pl.scan_csv(
-            temp_csv_path,
-            encoding="utf8-lossy",
-            infer_schema_length=0
-        )
-    
+            # --- BASELINE QUALITY CHECK FOR EXCEL ---
+            # Create a lazy frame from the generated temp CSV to inspect it
+            lf = pl.scan_csv(temp_csv_path, encoding="utf8-lossy", infer_schema_length=0)
+
+            total_rows = lf.select(pl.len()).collect().item()
+
+            # Stop execution if the Excel sheet is empty or contains only headers
+            if total_rows <= 5:
+                if os.path.exists(temp_csv_path):
+                    os.remove(temp_csv_path)
+                raise ValueError("The uploaded Excel file is empty or does not contain enough data rows to process.")
+            
+            # Calculate global null density for the Excel data
+            schema = lf.collect_schema()
+            null_counts_query = lf.select([pl.col(col).null_count() for col in schema.keys()])
+            null_counts_df = null_counts_query.collect()
+
+            total_nulls = sum([null_counts_df.get_column(col).item() for col in schema.keys()])
+            total_cells = total_rows * len(schema.keys())
+
+            null_ratio = total_nulls / total_cells if total_cells > 0 else 1.0
+           
+            # Reject the Excel file if more than 90% of the cells are empty
+            if null_ratio > 0.30:
+                if os.path.exists(temp_csv_path):
+                    os.remove(temp_csv_path)
+                raise ValueError(f"Excel dataset rejection: {round(null_ratio*100)}% of the file contains missing values.")
+
+
+            # If it passes the quality check, safely return the lazy frame
+            return lf
+        
+        except Exception as e:
+            if os.path.exists(temp_csv_path):
+                os.remove(temp_csv_path)
+            raise RuntimeError(f"Failed to process Excel file: {e}")
+        
+   
 
 class MetadataExtractor:
     def __init__(self, lazy_frame: pl.LazyFrame):
@@ -155,7 +207,11 @@ class DataEngine:
 
         # Trigger execution in streaming mode to handle huge files efficiently without RAM spikes
         transformed_lf.sink_csv(output_path)
-        
+
+        temp_csv = self.file_path.replace(os.path.splitext(self.file_path)[1], "_temp.csv")
+        if os.path.exists(temp_csv):
+            os.remove(temp_csv)
+
         return output_path
     
 
@@ -177,28 +233,18 @@ class DataTransformer:
             pl.LazyFrame: The modified LazyFrame with applied transformation steps.
         """
         #Drop specified columns
-        drop_cols = cleaning_plan.get("drop_columns", [])
+        drop_cols = cleaning_plan.get("columns_to_drop", [])
         if drop_cols:
             self.lf = self.lf.drop(drop_cols)
 
-        # Handle missing values based on the strategy
-        for fill_task in cleaning_plan.get("fill_missing", []):
-            col_name = fill_task.get("column")
-            strategy = fill_task.get("strategy")
-            
-            if strategy == "mean":
-                self.lf = self.lf.with_columns(
-                    pl.col(col_name).fill_null(pl.col(col_name).mean())
-                )
-            elif strategy == "mode":
-                # Mode extraction in Polars returns a Series, selecting the first element safely
-                self.lf = self.lf.with_columns(
-                    pl.col(col_name).fill_null(pl.col(col_name).mode().first())
-                )
-            elif strategy == "drop":
-                self.lf = self.lf.filter(pl.col(col_name).is_not_null())
+        type_mapping = {
+            "Int64": pl.Int64,
+            "Float64": pl.Float64,
+            "String": pl.String,
+            "Boolean": pl.Boolean
+        }
 
-        # Cast data types dynamically
+    # Cast data types dynamically
         for cast_task in cleaning_plan.get("cast_types", []):
             col_name = cast_task.get("column")
             target_type = cast_task.get("target_type")
@@ -206,7 +252,32 @@ class DataTransformer:
             if target_type == "Datetime":
                 # Automatically parses standard string format to Date/Datetime
                 self.lf = self.lf.with_columns(
-                    pl.col(col_name).str.to_datetime()
+                    pl.col(col_name).str.to_datetime(strict=False)
                 )
+
+            elif target_type in type_mapping:
+                self.lf = self.lf.with_columns(
+                    pl.col(col_name).cast(type_mapping[target_type], strict=False)
+                )
+
+        # Handle missing values based on the strategy
+        missing_strategies = cleaning_plan.get("missing_value_strategy", {})
+
+        for col_name, strategy in missing_strategies.items():
+            # Safety check: Ensure column actually exists in current lazy frame schema
+            if col_name in self.lf.collect_schema().keys():
+                if strategy == "mean":
+                    self.lf = self.lf.with_columns(
+                        pl.col(col_name).fill_null(pl.col(col_name).mean())
+                    )
+                elif strategy == "median" or strategy == "mode":
+                    # Combined median/mode logic using Polars expressions safely
+                    self.lf = self.lf.with_columns(
+                        pl.col(col_name).fill_null(pl.col(col_name).mode().first())
+                    )
+                elif strategy == "drop":
+                    self.lf = self.lf.filter(pl.col(col_name).is_not_null())
+
+
 
         return self.lf

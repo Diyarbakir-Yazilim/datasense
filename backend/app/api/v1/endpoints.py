@@ -7,6 +7,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, status
 from pydantic import BaseModel
 from backend.app.services.data_engine import DataEngine
 from backend.app.tasks import execute_autonomous_cleaning
+from fastapi.responses import FileResponse
 
 router = APIRouter()
 
@@ -112,3 +113,53 @@ async def start_cleaning(payload: CleanRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to dispatch background task: {str(e)}"
         )
+    
+from celery.result import AsyncResult
+
+@router.get("/tasks/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    Queries the Celery backend to track the current state of the cleaning task.
+    Returns whether the task is PENDING, SUCCESS, or FAILED.
+    """
+    task_result = AsyncResult(task_id)
+    
+    response = {
+        "task_id": task_id,
+        "status": task_result.status,
+        "result": None
+    }
+    
+    if task_result.status == "SUCCESS":
+        # Celery görevimiz başarılı bittiğinde bize temizlenen dosyanın yolunu dönecek
+        response["result"] = {
+            "cleaned_file_path": task_result.result
+        }
+    elif task_result.status == "FAILURE":
+        response["result"] = {
+            "error": str(task_result.info)  # Hata detayını yakalar
+        }
+        
+    return response
+
+
+@router.get("/download")
+async def download_file(file_path: str):
+    """
+    Downloads the processed and cleaned dataset from the local storage.
+    Verifies the file existence before initiating the secure stream.
+    """
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The requested file could not be found on the server."
+        )
+        
+    # Kullanıcı dosyayı indirirken ham ismiyle insin diye 'cleaned_' takısını koruyoruz
+    original_filename = os.path.basename(file_path)
+    
+    return FileResponse(
+        path=file_path,
+        filename=original_filename,
+        media_type="application/octet-stream"
+    )
