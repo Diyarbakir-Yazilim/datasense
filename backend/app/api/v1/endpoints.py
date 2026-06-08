@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, BackgroundTasks, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from celery.result import AsyncResult
 import os
 import aiofiles
