@@ -1,4 +1,7 @@
 # DataSense 🧠
+
+![DataSense Cover](/C:/Users/mahsu/.gemini/antigravity/brain/16f7dc52-7317-4873-94ea-0641760fbb13/datasense_cover_1781082140128.png)
+
 **An LLM-powered autonomous agent for intelligent data cleaning, EDA, and preprocessing.**
 
 DataSense automates the essential stages of the data science workflow. Upload raw data, and our AI agent will autonomously analyze, clean, and prepare your files for machine learning tasks.
@@ -8,6 +11,35 @@ DataSense automates the essential stages of the data science workflow. Upload ra
 - **Task Identification:** Automatic detection of classification or regression problem types.
 - **Automated EDA:** Data profiling and dynamic visualization generation.
 - **Privacy-Centric:** Only metadata is processed by the LLM to ensure data security.
+
+## 🏗️ System Architecture & Data Flow
+
+```mermaid
+sequenceDiagram
+    participant User as 👤 Kullanıcı
+    participant UI as 🖥️ Frontend (React)
+    participant API as ⚙️ Backend (FastAPI)
+    participant Worker as 🛠️ Celery Worker
+    participant LLM as 🧠 AI Engine (LangChain)
+
+    User->>UI: CSV Dosyası Yükler
+    UI->>API: POST /api/v1/analyze (multipart/form-data)
+    API->>API: Dosyayı Diske/S3'e Kaydet
+    API->>Worker: Asenkron Görev Başlat (Celery)
+    API-->>UI: 202 Accepted (job_id)
+    
+    UI->>API: GET /api/v1/status/{job_id} (Polling)
+    
+    Worker->>Worker: Pandas ile Metadata Çıkar (Schema, NaN counts)
+    Worker->>LLM: Sadece Metadata Gönder (Veri Gizliliği)
+    LLM-->>Worker: Temizleme & Analiz Kararları (JSON)
+    Worker->>Worker: Kararları Fiziksel Veriye Uygula
+    Worker->>API: İşlem Tamamlandı, Raporu Kaydet
+    
+    API-->>UI: 200 OK (status: completed, download_url)
+    UI->>User: Raporu ve Grafikleri Göster
+    User->>API: Temizlenmiş CSV'yi İndir
+```
 
 ## 🛠 Tech Stack
 - **Backend:** FastAPI

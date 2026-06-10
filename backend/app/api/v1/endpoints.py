@@ -1,46 +1,86 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from celery.result import AsyncResult
 import os
 import aiofiles
-from app.core.config import settings
+from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import JSONResponse, FileResponse
+from celery.result import AsyncResult
 from app.worker.tasks import analyze_dataset_task
+from app.core.config import settings
+import uuid
 
 router = APIRouter()
 
-@router.post("/upload")
-async def upload_dataset(file: UploadFile = File(...)):
-    """Uploads a dataset and starts a Celery background task for analysis."""
+@router.post("/analyze")
+async def upload_and_analyze(file: UploadFile = File(...)):
+    """
+    Kullanıcıdan dosyayı alır, geçici alana kaydeder ve Celery işçisine gönderir.
+    """
     if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="Only CSV or Excel files are allowed.")
-        
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.join(settings.UPLOAD_DIR, file.filename)
-    
-    # Save the file asynchronously
-    async with aiofiles.open(file_path, 'wb') as out_file:
-        content = await file.read()
-        await out_file.write(content)
-        
-    # Trigger celery task
-    task = analyze_dataset_task.delay(file_path)
-    
-    return {"message": "File uploaded successfully. Analysis started.", "task_id": task.id}
+        raise HTTPException(status_code=400, detail="Sadece CSV veya Excel dosyaları desteklenmektedir.")
 
-@router.get("/status/{task_id}")
-def get_status(task_id: str):
-    """Check the status of a Celery background task."""
-    task_result = AsyncResult(task_id)
-    result = {
-        "task_id": task_id,
-        "task_status": task_result.status,
-        "task_result": task_result.result if task_result.ready() else None
-    }
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    file_id = str(uuid.uuid4())
+    file_path = os.path.join(settings.UPLOAD_DIR, f"{file_id}_{file.filename}")
+
+    try:
+        async with aiofiles.open(file_path, 'wb') as out_file:
+            content = await file.read()
+            await out_file.write(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dosya kaydedilemedi: {str(e)}")
+
+    # Görevi Celery'ye gönder
+    task = analyze_dataset_task.delay(file_path, file_id)
+
+    return JSONResponse(status_code=202, content={
+        "job_id": task.id,
+        "status": "queued",
+        "message": "Dosya kuyruğa eklendi. Analiz başlıyor."
+    })
+
+
+@router.get("/status/{job_id}")
+async def get_task_status(job_id: str):
+    """
+    Celery görev durumunu döndürür.
+    """
+    task_result = AsyncResult(job_id)
     
-    if task_result.state == 'PROGRESS':
-        result.update({
-            "current": task_result.info.get('current', 0),
-            "total": task_result.info.get('total', 100),
-            "status_details": task_result.info.get('status', '')
-        })
+    if task_result.state == 'PENDING':
+        response = {
+            "state": task_result.state,
+            "status": "Görev sırada bekliyor..."
+        }
+    elif task_result.state != 'FAILURE':
+        response = {
+            "state": task_result.state,
+            "current": task_result.info.get('current', 0) if task_result.info else 0,
+            "total": task_result.info.get('total', 100) if task_result.info else 100,
+            "status": task_result.info.get('status', '') if task_result.info else '',
+            "result": task_result.result if task_result.state == 'SUCCESS' else None
+        }
+    else:
+        response = {
+            "state": task_result.state,
+            "status": str(task_result.info),
+        }
+    return response
+
+
+@router.get("/download/{job_id}")
+async def download_cleaned_file(job_id: str):
+    """
+    Analiz sonrası temizlenmiş dosyayı indirir.
+    """
+    task_result = AsyncResult(job_id)
+    if task_result.state != 'SUCCESS':
+        raise HTTPException(status_code=400, detail="İşlem henüz tamamlanmadı veya başarısız oldu.")
+    
+    result_data = task_result.result
+    if 'cleaned_file_path' not in result_data:
+        raise HTTPException(status_code=404, detail="Temizlenmiş dosya bulunamadı.")
         
-    return result
+    cleaned_path = result_data['cleaned_file_path']
+    if os.path.exists(cleaned_path):
+        return FileResponse(path=cleaned_path, filename=f"cleaned_{job_id}.csv", media_type='text/csv')
+    else:
+        raise HTTPException(status_code=404, detail="Dosya sunucuda yok.")
