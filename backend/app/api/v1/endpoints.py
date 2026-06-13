@@ -2,6 +2,10 @@ import os
 import aiofiles
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
+from pydantic import BaseModel
+import pandas as pd
+from langchain_groq import ChatGroq
+from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 from celery.result import AsyncResult
 from app.worker.tasks import analyze_dataset_task
 from app.core.config import settings
@@ -84,11 +88,6 @@ async def download_cleaned_file(job_id: str):
         return FileResponse(path=cleaned_path, filename=f"cleaned_{job_id}.csv", media_type='text/csv')
     else:
         raise HTTPException(status_code=404, detail="Dosya sunucuda yok.")
-
-from pydantic import BaseModel
-import pandas as pd
-from langchain_groq import ChatGroq
-from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 
 class ChatRequest(BaseModel):
     job_id: str
