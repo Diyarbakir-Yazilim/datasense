@@ -9,3 +9,9 @@ python-multipart==0.0.9
 aiofiles==24.1.0
 httpx==0.27.0
 python-dotenv==1.0.1
+pandas
+openpyxl
+tabulate
+langchain
+langchain-experimental
+langchain-groq
