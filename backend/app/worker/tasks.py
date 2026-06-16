@@ -12,7 +12,12 @@ def analyze_dataset_task(self, file_path: str, file_id: str):
     
     try:
         # 1. Veriyi Oku
-        df = pd.read_csv(file_path)
+        if file_path.endswith('.csv'):
+            df = pd.read_csv(file_path)
+            cleaned_file_path = file_path.replace(".csv", "_cleaned.csv")
+        else:
+            df = pd.read_excel(file_path)
+            cleaned_file_path = file_path.replace(".xlsx", "_cleaned.csv").replace(".xls", "_cleaned.csv")
         
         self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Metadata çıkarılıyor...'})
         time.sleep(1) # Simülasyon efekti
@@ -49,8 +54,7 @@ def analyze_dataset_task(self, file_path: str, file_id: str):
         for col in df.select_dtypes(include=['float64', 'int64']).columns:
             df[col] = df[col].fillna(df[col].mean())
             
-        # Temizlenmiş veriyi kaydet
-        cleaned_file_path = file_path.replace(".csv", "_cleaned.csv")
+        # Temizlenmiş veriyi kaydet (Hangi formatta gelirse gelsin CSV olarak kaydedelim)
         df.to_csv(cleaned_file_path, index=False)
         
         self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100, 'status': 'İşlem Tamamlandı!'})

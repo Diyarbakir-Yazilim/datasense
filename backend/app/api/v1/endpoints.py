@@ -1,6 +1,6 @@
 import os
 import aiofiles
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 import pandas as pd
@@ -10,11 +10,14 @@ from celery.result import AsyncResult
 from app.worker.tasks import analyze_dataset_task
 from app.core.config import settings
 import uuid
+from dotenv import load_dotenv
+
+load_dotenv()
 
 router = APIRouter()
 
 @router.post("/analyze")
-async def upload_and_analyze(file: UploadFile = File(...)):
+async def upload_and_analyze(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """
     Kullanıcıdan dosyayı alır, geçici alana kaydeder ve Celery işçisine gönderir.
     """
@@ -32,14 +35,19 @@ async def upload_and_analyze(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Dosya kaydedilemedi: {str(e)}")
 
-    # Görevi Celery'ye gönder
-    task = analyze_dataset_task.delay(file_path, file_id)
+    if settings.LOCAL_MODE:
+        background_tasks.add_task(analyze_dataset_task.apply_async, args=[file_path, file_id], task_id=file_id)
+        job_id = file_id
+    else:
+        task = analyze_dataset_task.apply_async(args=[file_path, file_id], task_id=file_id)
+        job_id = task.id
 
     return JSONResponse(status_code=202, content={
-        "job_id": task.id,
+        "job_id": job_id,
         "status": "queued",
         "message": "Dosya kuyruğa eklendi. Analiz başlıyor."
     })
+
 
 
 @router.get("/status/{job_id}")
