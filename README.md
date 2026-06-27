@@ -4,7 +4,7 @@
 
 **An LLM-powered autonomous agent for intelligent data cleaning, EDA, and preprocessing.**
 
-DataSense automates the essential stages of the data science workflow. Upload raw data, and our AI agent will autonomously analyze, clean, and prepare your files for machine learning tasks.
+DataSense automates the essential stages of the data science workflow. Upload raw data, and our AI agent will autonomously analyze, clean, and prepare your files for machine learning tasks
 
 ## 🚀 Key Features
 - **AI-Powered Cleaning:** Intelligent handling of missing values and data inconsistencies.
