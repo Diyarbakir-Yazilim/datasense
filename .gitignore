@@ -35,3 +35,8 @@ Thumbs.db
 # Uploads
 uploads/
 /tmp/datasense_uploads/
+
+# SQLite databases and test files
+*.sqlite
+backend/test.csv
+backend/test_upload.py

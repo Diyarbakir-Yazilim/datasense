@@ -1,16 +1,23 @@
 import os
 import aiofiles
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
+from pydantic import BaseModel
+import pandas as pd
+from langchain_groq import ChatGroq
+from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 from celery.result import AsyncResult
 from app.worker.tasks import analyze_dataset_task
 from app.core.config import settings
 import uuid
+from dotenv import load_dotenv
+
+load_dotenv()
 
 router = APIRouter()
 
 @router.post("/analyze")
-async def upload_and_analyze(file: UploadFile = File(...)):
+async def upload_and_analyze(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """
     Kullanıcıdan dosyayı alır, geçici alana kaydeder ve Celery işçisine gönderir.
     """
@@ -28,14 +35,19 @@ async def upload_and_analyze(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Dosya kaydedilemedi: {str(e)}")
 
-    # Görevi Celery'ye gönder
-    task = analyze_dataset_task.delay(file_path, file_id)
+    if settings.LOCAL_MODE:
+        background_tasks.add_task(analyze_dataset_task.apply_async, args=[file_path, file_id], task_id=file_id)
+        job_id = file_id
+    else:
+        task = analyze_dataset_task.apply_async(args=[file_path, file_id], task_id=file_id)
+        job_id = task.id
 
     return JSONResponse(status_code=202, content={
-        "job_id": task.id,
+        "job_id": job_id,
         "status": "queued",
         "message": "Dosya kuyruğa eklendi. Analiz başlıyor."
     })
+
 
 
 @router.get("/status/{job_id}")
@@ -84,3 +96,53 @@ async def download_cleaned_file(job_id: str):
         return FileResponse(path=cleaned_path, filename=f"cleaned_{job_id}.csv", media_type='text/csv')
     else:
         raise HTTPException(status_code=404, detail="Dosya sunucuda yok.")
+
+class ChatRequest(BaseModel):
+    job_id: str
+    message: str
+    use_cleaned_data: bool = True
+
+@router.post("/chat")
+async def chat_with_agent(request: ChatRequest):
+    """
+    Synapse-AI Entegrasyonu: Yüklenen veya temizlenen veri seti üzerinde
+    doğal dil ile soru sorma imkanı sağlar.
+    """
+    if "GROQ_API_KEY" not in os.environ:
+        return {"response": "System Error: GROQ_API_KEY bulunamadı. Lütfen .env dosyanızı kontrol edin."}
+        
+    # Dosya yolunu belirle
+    search_dir = settings.UPLOAD_DIR
+    target_file = None
+    
+    # Tüm dosyaları tara ve job_id ile eşleşen dosyayı bul
+    for f in os.listdir(search_dir):
+        if request.job_id in f:
+            if request.use_cleaned_data and "_cleaned.csv" in f:
+                target_file = os.path.join(search_dir, f)
+                break
+            elif not request.use_cleaned_data and "_cleaned.csv" not in f:
+                target_file = os.path.join(search_dir, f)
+                break
+                
+    if not target_file:
+        raise HTTPException(status_code=404, detail="Belirtilen job_id için dosya bulunamadı.")
+        
+    try:
+        # Pandas ile oku
+        df = pd.read_csv(target_file)
+        
+        # LangChain Agent oluştur
+        llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile")
+        agent = create_pandas_dataframe_agent(
+            llm, 
+            df, 
+            verbose=True, 
+            allow_dangerous_code=True
+        )
+        
+        result = agent.invoke(request.message)
+        return {"response": result["output"]}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent Hatası: {str(e)}")
