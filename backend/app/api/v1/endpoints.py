@@ -9,6 +9,7 @@ from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe
 from celery.result import AsyncResult
 from app.worker.tasks import analyze_dataset_task
 from app.core.config import settings
+from app.core.celery_app import celery_app
 import uuid
 from dotenv import load_dotenv
 
@@ -55,7 +56,7 @@ async def get_task_status(job_id: str):
     """
     Celery görev durumunu döndürür.
     """
-    task_result = AsyncResult(job_id)
+    task_result = AsyncResult(job_id, app=celery_app)
     
     if task_result.state == 'PENDING':
         response = {
@@ -83,7 +84,7 @@ async def download_cleaned_file(job_id: str):
     """
     Analiz sonrası temizlenmiş dosyayı indirir.
     """
-    task_result = AsyncResult(job_id)
+    task_result = AsyncResult(job_id, app=celery_app)
     if task_result.state != 'SUCCESS':
         raise HTTPException(status_code=400, detail="İşlem henüz tamamlanmadı veya başarısız oldu.")
     
