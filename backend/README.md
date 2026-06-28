@@ -22,3 +22,10 @@ To run the backend locally:
    ```bash
    uvicorn app.main:app --reload --port 8000
    ```
+5. In a separate terminal, start the Celery Worker for background tasks:
+   ```bash
+   # Ensure you have activated the virtual environment first
+   celery -A app.core.celery_app worker --loglevel=info -P threads -Q main-queue
+   ```
+
+*Note: Ensure your local Redis server is running on `localhost:6379` before starting the FastAPI server and Celery worker.*
