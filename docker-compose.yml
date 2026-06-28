@@ -30,11 +30,12 @@ services:
       - "8000:8000"
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - AI_API_URL=http://ai_api:8001
       - UPLOAD_DIR=/app/uploads
       - DEBUG=false
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
       redis:
         condition: service_healthy
@@ -48,13 +49,14 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: datasense_worker
-    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2 -Q datasense_queue
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2 -Q main-queue
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - AI_API_URL=http://ai_api:8001
       - UPLOAD_DIR=/app/uploads
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
       redis:
         condition: service_healthy
@@ -74,6 +76,8 @@ services:
       - "8001:8001"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-gpt-4}
     restart: unless-stopped
 

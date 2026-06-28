@@ -134,7 +134,7 @@ async def chat_with_agent(request: ChatRequest):
         df = pd.read_csv(target_file)
         
         # LangChain Agent oluştur
-        llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile")
+        llm = ChatGroq(api_key=settings.GROQ_API_KEY, temperature=0, model_name="llama-3.3-70b-versatile")
         agent = create_pandas_dataframe_agent(
             llm, 
             df, 

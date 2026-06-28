@@ -53,9 +53,9 @@ sequenceDiagram
 - Docker & Docker Compose
 - OpenAI / Gemini API Keys
 
-### Installation & Running Locally
+### Installation & Running Locally (with Docker)
 
-We provide a `Makefile` to make running the project via Docker extremely simple.
+The easiest way to run the entire DataSense stack is using Docker Compose. This will automatically build and link the Frontend, Backend, AI Engine, Celery Worker, and Redis container.
 
 1. **Clone the repository:**
    ```bash
@@ -64,23 +64,31 @@ We provide a `Makefile` to make running the project via Docker extremely simple.
    ```
 
 2. **Environment Variables:**
-   Rename `.env.example` to `.env` and fill in your API keys:
+   Rename `.env.example` to `.env` and fill in your API keys (e.g., GROQ_API_KEY, OPENAI_API_KEY):
    ```bash
    cp .env.example .env
    ```
 
-3. **Run the application:**
-   You can easily start the whole stack (Frontend, Backend, AI Engine, Redis, Worker) using the Makefile:
+3. **Run the application (Docker):**
+   Execute the following command in the root directory to build and start all services:
    ```bash
-   make up
+   docker-compose up --build
    ```
+   *Note: If you want to run it in the background, add the `-d` flag: `docker-compose up --build -d`*
 
-### 🔧 Useful Makefile Commands
-- `make build` : Build all docker images
-- `make up` : Start all services in the background
-- `make logs` : View live logs of all services
-- `make down` : Stop all services
-- `make clean` : Stop services and delete volumes/data
+Once the containers are running:
+- **Frontend (UI)** will be available at: http://localhost:3000
+- **Backend (API)** will be available at: http://localhost:8000/docs
+
+### 🛑 Stopping the Application
+To stop all services and preserve data:
+```bash
+docker-compose stop
+```
+To shut down completely and remove containers:
+```bash
+docker-compose down
+```
 
 ---
 *Autonomous Data Analysis Pipeline.*
