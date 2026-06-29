@@ -5,7 +5,7 @@ import { FiSend } from 'react-icons/fi';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 const AgentChat = ({ jobId }) => {
-  const [messages, setMessages] = useState([{ sender: 'bot', text: 'Hello! I am Synapse-AI. Your data is ready. What would you like to know?' }]);
+  const [messages, setMessages] = useState([{ sender: 'bot', text: 'Hello! I am Datasense. Your data is ready. What would you like to know?' }]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [useCleanedData, setUseCleanedData] = useState(true);
@@ -46,7 +46,7 @@ const AgentChat = ({ jobId }) => {
     <div className="glass-panel chat-container fade-in">
       <div style={{ padding: '20px', borderBottom: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0, background: 'linear-gradient(to right, var(--accent-blue), var(--accent-purple))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          💬 Synapse-AI Agent
+          💬 Datasense
         </h3>
         <label style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
           <input 
