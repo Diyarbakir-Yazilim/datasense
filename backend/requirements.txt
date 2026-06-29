@@ -15,3 +15,4 @@ tabulate
 langchain
 langchain-experimental
 langchain-groq
+polars
