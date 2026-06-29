@@ -44,7 +44,7 @@ jobs:
 
       - name: Testleri çalıştır
         run: pytest tests/ -v --tb=short
-        continue-on-error: true
+        
 
   # ─── AI API Testleri ───────────────────────────────────────────
   ai-api-test:
@@ -76,7 +76,6 @@ jobs:
 
       - name: Testleri çalıştır
         run: pytest tests/ -v --tb=short
-        continue-on-error: true
 
   # ─── Frontend Testleri ─────────────────────────────────────────
   frontend-test:
@@ -99,7 +98,6 @@ jobs:
 
       - name: Lint kontrolü
         run: npm run lint
-        continue-on-error: true
 
       - name: Build kontrolü
         run: npm run build
@@ -118,4 +116,4 @@ jobs:
 
       - name: Docker imajlarını build et
         run: docker compose build
-        continue-on-error: true
+        
