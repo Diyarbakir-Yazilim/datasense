@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str | None = None
     
     class Config:
-        env_file = "../.env"
+        env_file = ".env"
         extra = "ignore"
 
 settings = Settings()
