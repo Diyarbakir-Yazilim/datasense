@@ -2,7 +2,6 @@ import os
 import sys
 from fastapi import FastAPI
 from pydantic import BaseModel
-from contextlib import asynccontextmanager
 
 # Projenin ana dizinini yola ekleyelim ki ajanlara ulaşılabilsin
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
