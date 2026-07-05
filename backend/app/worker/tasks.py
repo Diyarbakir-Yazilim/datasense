@@ -1,5 +1,8 @@
 import time
 import logging
+import json
+import httpx
+import os
 import polars as pl
 from app.core.celery_app import celery_app
 
@@ -101,26 +104,67 @@ def analyze_dataset_task(self, file_path: str, file_id: str):
         self.update_state(state='PROGRESS', meta={'current': 60, 'total': 100, 'status': 'AI Engine ile iletişime geçiliyor...'})
         time.sleep(1) # Simülasyon efekti
         
-        # TODO: AI_API entegrasyonu
-        ai_decisions = {
-            "task_type": "Regression",
-            "applied_steps": ["Eksik veriler ortalama ile dolduruldu.", "Gereksiz sütunlar atıldı."]
-        }
+        # --- AI_API entegrasyonu ---
+        try:
+            ai_api_url = os.environ.get("AI_API_URL", "http://ai_api:8001")
+            response = httpx.post(
+                f"{ai_api_url}/decide",
+                json={"metadata_json": json.dumps(metadata)},
+                timeout=120.0
+            )
+            response.raise_for_status()
+            ai_decisions = response.json()
+        except Exception as ai_err:
+            logger.error(f"AI API ile iletişim kurulamadı: {str(ai_err)}", extra=log_extra)
+            self.update_state(state='FAILURE', meta={'status': 'Hata: Karar motoruna (AI) ulaşılamadı.'})
+            return {"status": "FAILED", "error": "AI Engine connection error"}
         
         self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Veri temizleme uygulanıyor...'})
         
         # --- 3. VERİ TEMİZLEME VE DİSKE YAZMA ADIMI ---
         try:
-            numeric_cols = [col for col, dtype in schema.items() if dtype.is_numeric()]
-            
+            # 1. Sütunları Düşürme (Drop)
+            columns_to_drop = ai_decisions.get("columns_to_drop", [])
+            if columns_to_drop:
+                existing_cols_to_drop = [col for col in columns_to_drop if col in columns_list]
+                df_lazy = df_lazy.drop(existing_cols_to_drop)
+                for col in existing_cols_to_drop:
+                    schema.pop(col, None)
+                    columns_list.remove(col)
+                    
+            # 2. Eksik Veri Doldurma (Imputation)
+            missing_strategy = ai_decisions.get("missing_value_strategy", {})
             cleaning_expressions = []
-            for col in numeric_cols:
-                # Kolonun hepsi null ise mean() hata vermesin diye kontrol ekliyoruz
+            
+            for col, strategy in missing_strategy.items():
+                if col not in columns_list:
+                    continue
+                
+                # Sütunun boşluk sayısını bul
                 missing_cnt = next((c["missing_count"] for c in metadata["columns"] if c["name"] == col), 0)
-                if missing_cnt < num_rows:
+                if missing_cnt == 0:
+                    continue
+                
+                # Eğer tüm sütun null ise ortalama/medyan alınamaz, 0 ile doldur
+                if missing_cnt == num_rows:
+                    cleaning_expressions.append(pl.col(col).fill_null(0))
+                    continue
+                
+                # Strateji Uygulama
+                if strategy == "mean":
                     cleaning_expressions.append(pl.col(col).fill_null(pl.col(col).mean()))
+                elif strategy == "median":
+                    cleaning_expressions.append(pl.col(col).fill_null(pl.col(col).median()))
+                elif strategy == "mode":
+                    # Mode returns a Series, take first
+                    cleaning_expressions.append(pl.col(col).fill_null(pl.col(col).mode().first()))
+                elif strategy == "drop":
+                    df_lazy = df_lazy.filter(pl.col(col).is_not_null())
                 else:
-                    cleaning_expressions.append(pl.col(col).fill_null(0)) # Tamamı boşsa 0 bas geç
+                    if schema[col].is_numeric():
+                        cleaning_expressions.append(pl.col(col).fill_null(pl.col(col).mean()))
+                    else:
+                        cleaning_expressions.append(pl.col(col).fill_null(pl.col(col).mode().first()))
             
             if cleaning_expressions:
                 df_lazy = df_lazy.with_columns(cleaning_expressions)

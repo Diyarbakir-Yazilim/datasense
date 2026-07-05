@@ -34,7 +34,7 @@ services:
       - UPLOAD_DIR=/app/uploads
       - DEBUG=false
       - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
       redis:
@@ -55,7 +55,7 @@ services:
       - AI_API_URL=http://ai_api:8001
       - UPLOAD_DIR=/app/uploads
       - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
       redis:
@@ -76,9 +76,8 @@ services:
       - "8001:8001"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - LLM_MODEL=${LLM_MODEL:-gpt-4}
     restart: unless-stopped
 
   # ─── Frontend (React + Vite) ───────────────────────────────────
