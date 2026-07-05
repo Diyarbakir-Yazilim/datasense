@@ -162,7 +162,20 @@ async def chat_with_agent(request: ChatRequest):
         )
         
         result = agent.invoke(request.message)
-        return {"response": result["output"]}
+        
+        output = result.get("output", "")
+        if isinstance(output, list):
+            text_parts = []
+            for part in output:
+                if isinstance(part, dict) and "text" in part:
+                    text_parts.append(part["text"])
+                elif isinstance(part, str):
+                    text_parts.append(part)
+            output = "\n".join(text_parts)
+        elif not isinstance(output, str):
+            output = str(output)
+            
+        return {"response": output}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent Hatası: {str(e)}")
