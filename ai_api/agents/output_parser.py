@@ -18,8 +18,9 @@ class DataCleaningDecision(BaseModel):
         if isinstance(v, str):
             try:
                 parsed = json.loads(v)
-                if isinstance(parsed, list): return parsed
-            except:
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
                 return [x.strip() for x in v.split(',') if x.strip()]
         return v
         
@@ -28,7 +29,8 @@ class DataCleaningDecision(BaseModel):
         if isinstance(v, str):
             try:
                 parsed = json.loads(v)
-                if isinstance(parsed, dict): return parsed
-            except:
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
                 return {}
         return v
