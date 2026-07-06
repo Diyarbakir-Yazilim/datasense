@@ -44,3 +44,41 @@ def test_get_task_status_pending(mock_async_result, client):
     json_resp = response.json()
     assert json_resp["state"] == "PENDING"
     assert "sırada bekliyor" in json_resp["status"]
+
+# DOSYANIN EN ALTINA EKLEYEBİLİRSİNİZ:
+
+def test_read_root(client):
+    """main.py dosyasındaki root (/) endpoint'ini test eder."""
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json() == {"message": "Welcome to DataSense API"}
+
+@patch("app.api.v1.endpoints.AsyncResult")
+def test_get_task_status_success(mock_async_result, client):
+    """Celery görevi BAŞARIYLA bittiğinde (SUCCESS) status endpoint'ini test eder."""
+    mock_result = MagicMock()
+    mock_result.state = "SUCCESS"
+    # Celery başarılı bittiğinde genelde result içinde temizlenmiş veri özeti döner
+    mock_result.result = {"cleaned_rows": 150, "dropped_columns": 2} 
+    mock_async_result.return_value = mock_result
+
+    response = client.get("/api/v1/status/fake-task-id-123")
+    
+    assert response.status_code == 200
+    json_resp = response.json()
+    assert json_resp["state"] == "SUCCESS"
+    assert "result" in json_resp
+
+@patch("app.api.v1.endpoints.AsyncResult")
+def test_get_task_status_failure(mock_async_result, client):
+    """Celery görevi HATA aldığında (FAILURE) status endpoint'ini test eder."""
+    mock_result = MagicMock()
+    mock_result.state = "FAILURE"
+    mock_result.result = "ValueError: Polars parsing error" # Örnek bir hata mesajı
+    mock_async_result.return_value = mock_result
+
+    response = client.get("/api/v1/status/fake-task-id-123")
+    
+    assert response.status_code == 200  # Veya projeniz hata durumunda 500 dönüyorsa 500 yapın
+    json_resp = response.json()
+    assert json_resp["state"] == "FAILURE"
