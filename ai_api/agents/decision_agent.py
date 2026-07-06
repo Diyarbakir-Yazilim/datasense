@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
-from prompts.templates import DATA_CLEANING_SYSTEM_PROMPT
+from prompts.manager import PromptManager
 from agents.output_parser import DataCleaningDecision
 
 # Load environment variables (like GEMINI_API_KEY)
@@ -34,17 +34,24 @@ def get_data_cleaning_decision(data_metadata: str) -> dict:
     # Modern LangChain approach replacing manual StructuredOutputParser
     structured_llm = llm.with_structured_output(DataCleaningDecision)
     
-    # 3. Prepare the prompt template
+    # 3. Load the appropriate prompt using PromptManager
+    prompt_manager = PromptManager()
+    prompt_template_str, version_id = prompt_manager.get_prompt("data_cleaning")
+    
+    # 4. Prepare the prompt template
     prompt = PromptTemplate(
-        template=DATA_CLEANING_SYSTEM_PROMPT,
+        template=prompt_template_str,
         input_variables=["data_metadata"]
     )
     
-    # 4. Create the chain (Prompt -> LLM with Structured Output)
+    # 5. Create the chain (Prompt -> LLM with Structured Output)
     chain = prompt | structured_llm
     
-    # 5. Invoke the chain and get the structured Pydantic object
+    # 6. Invoke the chain and get the structured Pydantic object
     decision: DataCleaningDecision = chain.invoke({"data_metadata": data_metadata})
     
-    # Return as a dictionary for easy consumption by the backend API
-    return decision.model_dump()
+    # 7. Return as a dictionary for easy consumption by the backend API
+    decision_dict = decision.model_dump()
+    decision_dict["prompt_version"] = version_id
+    
+    return decision_dict
