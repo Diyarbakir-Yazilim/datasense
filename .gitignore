@@ -40,3 +40,7 @@ uploads/
 *.sqlite
 backend/test.csv
 backend/test_upload.py
+
+# Added to ignore large datasets and docs
+*.pdf
+*.csv
