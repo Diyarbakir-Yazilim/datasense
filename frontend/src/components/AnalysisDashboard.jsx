@@ -82,7 +82,7 @@ export default function AnalysisDashboard({ jobId }) {
             setLoading(false);
           } else if (statusRes.data.state === 'FAILURE') {
             clearInterval(pollInterval);
-            alert("Override işlemi başarısız oldu.");
+            window.alert("Override işlemi başarısız oldu.");
             setLoading(false);
           }
         } catch (e) {
