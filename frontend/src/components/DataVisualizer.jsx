@@ -87,19 +87,29 @@ export default function DataVisualizer({ data }) {
       distOptions = {
         toolbox: commonToolbox,
         tooltip: { trigger: 'item' },
-        legend: { type: 'scroll', top: '10%', left: 'center', textStyle: { color: '#fff' } },
+        legend: { show: false },
         series: [
           {
             name: 'Dağılım',
             type: 'pie',
-            radius: ['40%', '70%'],
-            center: ['50%', '60%'],
+            radius: ['30%', '45%'],
+            center: ['50%', '50%'],
             itemStyle: {
               borderRadius: 10,
               borderColor: '#131A26',
               borderWidth: 2
             },
-            label: { show: false },
+            label: { 
+              show: true, 
+              formatter: '{b}\n{d}%', 
+              color: 'rgba(255,255,255,0.8)',
+              width: 90,
+              overflow: 'break'
+            },
+            labelLine: {
+              length: 10,
+              length2: 10
+            },
             data: pieData
           }
         ]
