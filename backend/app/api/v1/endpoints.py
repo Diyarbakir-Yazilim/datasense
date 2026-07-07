@@ -51,6 +51,41 @@ async def upload_and_analyze(background_tasks: BackgroundTasks, file: UploadFile
     })
 
 
+class OverrideRequest(BaseModel):
+    job_id: str
+    manual_decisions: dict
+
+@router.post("/override")
+async def override_decisions(request: OverrideRequest, background_tasks: BackgroundTasks):
+    """
+    Kullanıcının manuel olarak değiştirdiği kararları alır ve
+    AI adımını atlayarak veri temizleme işlemlerini baştan başlatır.
+    """
+    search_dir = settings.UPLOAD_DIR
+    target_file = None
+    
+    for f in os.listdir(search_dir):
+        if request.job_id in f and "_cleaned" not in f:
+            target_file = os.path.join(search_dir, f)
+            break
+            
+    if not target_file:
+        raise HTTPException(status_code=404, detail="Orijinal veri dosyası bulunamadı. Lütfen dosyayı tekrar yükleyin.")
+
+    new_job_id = str(uuid.uuid4())
+    
+    if settings.LOCAL_MODE:
+        background_tasks.add_task(analyze_dataset_task.apply_async, args=[target_file, new_job_id, request.manual_decisions], task_id=new_job_id)
+    else:
+        task = analyze_dataset_task.apply_async(args=[target_file, new_job_id, request.manual_decisions], task_id=new_job_id)
+        new_job_id = task.id
+
+    return JSONResponse(status_code=202, content={
+        "job_id": new_job_id,
+        "status": "queued",
+        "message": "Manuel kararlar alındı. Analiz yeniden başlatılıyor."
+    })
+
 
 @router.get("/status/{job_id}")
 async def get_task_status(job_id: str):
@@ -95,7 +130,10 @@ async def download_cleaned_file(job_id: str):
         
     cleaned_path = result_data['cleaned_file_path']
     if os.path.exists(cleaned_path):
-        return FileResponse(path=cleaned_path, filename=f"cleaned_{job_id}.csv", media_type='text/csv')
+        is_excel = cleaned_path.endswith('.xlsx')
+        media_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if is_excel else 'text/csv'
+        filename = f"cleaned_{job_id}.xlsx" if is_excel else f"cleaned_{job_id}.csv"
+        return FileResponse(path=cleaned_path, filename=filename, media_type=media_type)
     else:
         raise HTTPException(status_code=404, detail="Dosya sunucuda yok.")
 
