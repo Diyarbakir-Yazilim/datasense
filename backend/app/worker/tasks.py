@@ -136,7 +136,7 @@ def analyze_dataset_task(self, file_path: str, file_id: str):
                     columns_list.remove(col)
                     
             # 2. Eksik Veri Doldurma (Imputation)
-            missing_strategy = ai_decisions.get("missing_value_strategy", {})
+            missing_strategy = ai_decisions.get("missing_value_strategy") or {}
             cleaning_expressions = []
             
             for col, strategy in missing_strategy.items():
