@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import AgentChat from './components/AgentChat';
+import AnalysisDashboard from './components/AnalysisDashboard';
 import UploadArea from './components/UploadArea';
 
 export default function App() {
@@ -8,15 +8,15 @@ export default function App() {
   return (
     <div className="app-container">
       <div className="header fade-in">
-        <h1>DataSense 🧠</h1>
-        <p>Autonomous Data Analysis Pipeline & Conversational AI Agent</p>
+        <h1>DataSense <span className="gradient-text">Premium</span></h1>
+        <p>Otonom Veri Analisti & Karar Destek Sistemi</p>
       </div>
       
       {!jobId ? (
         <UploadArea onUploadComplete={(id) => setJobId(id)} />
       ) : (
         <div className="fade-in">
-          <AgentChat jobId={jobId} />
+          <AnalysisDashboard jobId={jobId} />
         </div>
       )}
     </div>

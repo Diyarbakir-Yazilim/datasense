@@ -84,7 +84,7 @@ export default function UploadArea({ onUploadComplete }) {
   return (
     <div className="glass-panel fade-in" style={{ padding: '30px' }}>
       {!uploading ? (
-        <div {...getRootProps()} className="upload-container glass-panel">
+        <div {...getRootProps()} className={`upload-area ${isDragActive ? 'dragging' : ''}`}>
           <input {...getInputProps()} />
           <FiUploadCloud className="upload-icon" />
           <h2 style={{ marginBottom: '10px' }}>

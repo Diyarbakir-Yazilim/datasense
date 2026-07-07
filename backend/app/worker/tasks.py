@@ -114,6 +114,9 @@ def analyze_dataset_task(self, file_path: str, file_id: str):
             )
             response.raise_for_status()
             ai_decisions = response.json()
+            
+            prompt_version = ai_decisions.get("prompt_version", "unknown")
+            logger.info(f"A/B Test - Kullanılan Prompt Versiyonu: {prompt_version}", extra=log_extra)
         except Exception as ai_err:
             logger.error(f"AI API ile iletişim kurulamadı: {str(ai_err)}", extra=log_extra)
             self.update_state(state='FAILED_TASK', meta={'status': 'Hata: Karar motoruna (AI) ulaşılamadı.'})

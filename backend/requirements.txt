@@ -18,3 +18,4 @@ langchain-groq
 langchain-google-genai
 langchain-openai
 polars
+fastexcel
