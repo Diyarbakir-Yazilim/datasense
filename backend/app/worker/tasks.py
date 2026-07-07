@@ -17,7 +17,7 @@ if not logger.handlers:
     logger.addHandler(file_handler)
 
 @celery_app.task(bind=True)
-def analyze_dataset_task(self, file_path: str, file_id: str):
+def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: dict = None):
     """
     Refactored data processing task using Polars for high performance profiling,
     metadata extraction, and optimized memory management. Includes advanced error handling.
@@ -42,7 +42,10 @@ def analyze_dataset_task(self, file_path: str, file_id: str):
                 
             elif file_path.endswith(('.xlsx', '.xls')):
                 df_eager = pl.read_excel(file_path)
-                cleaned_file_path = file_path.replace(".xlsx", "_cleaned.csv").replace(".xls", "_cleaned.csv")
+                if file_path.endswith('.xlsx'):
+                    cleaned_file_path = file_path.replace(".xlsx", "_cleaned.xlsx")
+                else:
+                    cleaned_file_path = file_path.replace(".xls", "_cleaned.xlsx")
                 
                 df_lazy = df_eager.lazy()
                 schema = df_eager.schema
@@ -104,19 +107,24 @@ def analyze_dataset_task(self, file_path: str, file_id: str):
         self.update_state(state='PROGRESS', meta={'current': 60, 'total': 100, 'status': 'AI Engine ile iletişime geçiliyor...'})
         time.sleep(1) # Simülasyon efekti
         
-        # --- AI_API entegrasyonu ---
+        # --- AI_API entegrasyonu VEYA Override Kararları ---
         try:
-            ai_api_url = os.environ.get("AI_API_URL", "http://ai_api:8001")
-            response = httpx.post(
-                f"{ai_api_url}/decide",
-                json={"metadata_json": json.dumps(metadata)},
-                timeout=120.0
-            )
-            response.raise_for_status()
-            ai_decisions = response.json()
-            
-            prompt_version = ai_decisions.get("prompt_version", "unknown")
-            logger.info(f"A/B Test - Kullanılan Prompt Versiyonu: {prompt_version}", extra=log_extra)
+            if manual_decisions:
+                logger.info("Manuel düzenleme (Override) algılandı. AI motoru atlanıyor.", extra=log_extra)
+                ai_decisions = manual_decisions
+                prompt_version = "override"
+            else:
+                ai_api_url = os.environ.get("AI_API_URL", "http://ai_api:8001")
+                response = httpx.post(
+                    f"{ai_api_url}/decide",
+                    json={"metadata_json": json.dumps(metadata)},
+                    timeout=120.0
+                )
+                response.raise_for_status()
+                ai_decisions = response.json()
+                
+                prompt_version = ai_decisions.get("prompt_version", "unknown")
+                logger.info(f"A/B Test - Kullanılan Prompt Versiyonu: {prompt_version}", extra=log_extra)
         except Exception as ai_err:
             logger.error(f"AI API ile iletişim kurulamadı: {str(ai_err)}", extra=log_extra)
             self.update_state(state='FAILED_TASK', meta={'status': 'Hata: Karar motoruna (AI) ulaşılamadı.'})
@@ -136,7 +144,7 @@ def analyze_dataset_task(self, file_path: str, file_id: str):
                     columns_list.remove(col)
                     
             # 2. Eksik Veri Doldurma (Imputation)
-            missing_strategy = ai_decisions.get("missing_value_strategy", {})
+            missing_strategy = ai_decisions.get("missing_value_strategy") or {}
             cleaning_expressions = []
             
             for col, strategy in missing_strategy.items():
@@ -174,7 +182,13 @@ def analyze_dataset_task(self, file_path: str, file_id: str):
                 df_lazy = df_lazy.with_columns(cleaning_expressions)
                 
             final_df = df_lazy.collect()
-            final_df.write_csv(cleaned_file_path)
+            if cleaned_file_path.endswith('.xlsx'):
+                try:
+                    final_df.write_excel(cleaned_file_path)
+                except Exception:
+                    final_df.to_pandas().to_excel(cleaned_file_path, index=False)
+            else:
+                final_df.write_csv(cleaned_file_path)
             
         except Exception as clean_err:
             logger.error(f"Veri temizleme veya diske yazma hatası: {str(clean_err)}", extra=log_extra)

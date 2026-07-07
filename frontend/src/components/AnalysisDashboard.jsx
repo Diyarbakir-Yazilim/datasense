@@ -9,12 +9,17 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 export default function AnalysisDashboard({ jobId }) {
   const [taskData, setTaskData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeJobId, setActiveJobId] = useState(jobId);
+
+  useEffect(() => {
+    setActiveJobId(jobId);
+  }, [jobId]);
 
   useEffect(() => {
     // Simulated fetch for the completed task data since we are mimicking the new flow
     const fetchStatus = async () => {
       try {
-        const res = await axios.get(`${API_URL}/status/${jobId}`);
+        const res = await axios.get(`${API_URL}/status/${activeJobId}`);
         if (res.data && res.data.state === 'SUCCESS') {
            setTaskData(res.data.result);
         } else {
@@ -44,15 +49,51 @@ export default function AnalysisDashboard({ jobId }) {
     };
     
     fetchStatus();
-  }, [jobId]);
+  }, [activeJobId]);
 
   const handleDownload = () => {
-    window.location.href = `${API_URL}/download/${jobId}`;
+    window.location.href = `${API_URL}/download/${activeJobId}`;
   };
 
-  const handleOverride = (key, newValue) => {
+  const handleOverride = async (key, newValue) => {
     console.log(`Overriding ${key} with:`, newValue);
-    // In a real flow, this would send a POST request to update the LLM decision before execution.
+    setLoading(true);
+    
+    const updatedDecisions = {
+      ...taskData.ai_decisions,
+      [key]: newValue
+    };
+    
+    try {
+      const res = await axios.post(`${API_URL}/override`, {
+        job_id: activeJobId,
+        manual_decisions: updatedDecisions
+      });
+      
+      const newJobId = res.data.job_id;
+      
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await axios.get(`${API_URL}/status/${newJobId}`);
+          if (statusRes.data.state === 'SUCCESS') {
+            clearInterval(pollInterval);
+            setTaskData(statusRes.data.result);
+            setActiveJobId(newJobId);
+            setLoading(false);
+          } else if (statusRes.data.state === 'FAILURE') {
+            clearInterval(pollInterval);
+            window.alert("Override işlemi başarısız oldu.");
+            setLoading(false);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }, 2000);
+      
+    } catch (err) {
+      console.error("Override hatası:", err);
+      setLoading(false);
+    }
   };
 
   if (loading) return <div className="fade-in" style={{ textAlign: 'center', padding: '50px' }}>Yükleniyor...</div>;
@@ -64,7 +105,7 @@ export default function AnalysisDashboard({ jobId }) {
         
         {taskData?.cleaned_file_path && (
           <button className="btn btn-primary" onClick={handleDownload} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FiDownload /> Temizlenmiş CSV İndir
+            <FiDownload /> Temizlenmiş Dosyayı İndir
           </button>
         )}
       </div>
