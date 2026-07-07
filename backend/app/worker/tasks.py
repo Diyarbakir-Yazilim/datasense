@@ -181,6 +181,84 @@ def analyze_dataset_task(self, file_path: str, file_id: str):
             self.update_state(state='FAILED_TASK', meta={'status': 'Hata: Veri temizleme adımı başarısız oldu.'})
             return {"status": "FAILED", "error": "Cleaning or saving error"}
         
+        # --- 4. GRAFİK (CHART) VERİSİ HAZIRLAMA ---
+        self.update_state(state='PROGRESS', meta={'current': 90, 'total': 100, 'status': 'Grafikler hesaplanıyor...'})
+        
+        chart_data = {
+            "correlation_matrix": None,
+            "target_distribution": None
+        }
+        
+        try:
+            # 4.1 Korelasyon Matrisi (#51)
+            numeric_cols = [col for col in final_df.columns if final_df.schema[col].is_numeric()]
+            if len(numeric_cols) > 1:
+                corr_df = final_df.select(numeric_cols).corr().fill_nan(0).fill_null(0)
+                chart_data["correlation_matrix"] = {
+                    "columns": numeric_cols,
+                    "values": corr_df.to_numpy().tolist()
+                }
+                
+                # Top correlated pair scatter plot (# Faz 4+)
+                try:
+                    corr_np = corr_df.to_numpy()
+                    max_corr = -1
+                    best_pair = None
+                    for i in range(len(numeric_cols)):
+                        for j in range(i + 1, len(numeric_cols)):
+                            val = abs(corr_np[i][j])
+                            if val > max_corr and val < 0.999:
+                                max_corr = val
+                                best_pair = (numeric_cols[i], numeric_cols[j])
+                    
+                    if best_pair:
+                        col_x, col_y = best_pair
+                        scatter_df = final_df.select([col_x, col_y]).drop_nulls()
+                        if scatter_df.height > 1000:
+                            scatter_df = scatter_df.sample(n=1000)
+                        
+                        chart_data["scatter_plot"] = {
+                            "x_col": col_x,
+                            "y_col": col_y,
+                            "data": scatter_df.to_numpy().tolist(),
+                            "correlation": float(max_corr)
+                        }
+                except Exception as e:
+                    logger.warning(f"Scatter plot verisi hesaplanamadı: {e}", extra=log_extra)
+                
+            # 4.2 Dağılım Grafiği (#50)
+            target_col = ai_decisions.get("target_column")
+            task_type = ai_decisions.get("task_type")
+            
+            if target_col and target_col in final_df.columns:
+                is_num = final_df.schema[target_col].is_numeric()
+                if task_type == "Classification" or not is_num:
+                    try:
+                        dist_df = final_df.group_by(target_col).len().sort("len", descending=True).limit(10)
+                        count_col = "len"
+                    except Exception:
+                        dist_df = final_df.group_by(target_col).count().sort("count", descending=True).limit(10)
+                        count_col = "count"
+                        
+                    labels = [str(x) if x is not None else "Unknown" for x in dist_df.get_column(target_col).to_list()]
+                    values = dist_df.get_column(count_col).to_list()
+                    
+                    chart_data["target_distribution"] = {
+                        "type": "categorical",
+                        "labels": labels,
+                        "values": values
+                    }
+                else:
+                    sample_df = final_df.select(target_col).drop_nulls()
+                    if sample_df.height > 1000:
+                        sample_df = sample_df.sample(n=1000)
+                    chart_data["target_distribution"] = {
+                        "type": "numerical",
+                        "values": sample_df.get_column(target_col).to_list()
+                    }
+        except Exception as chart_err:
+            logger.error(f"Grafik verisi hesaplama hatası: {str(chart_err)}", extra=log_extra)
+            
         self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100, 'status': 'İşlem Tamamlandı!'})
         logger.info("Veri motoru tüm işlemleri başarıyla tamamladı.", extra=log_extra)
         
@@ -189,7 +267,8 @@ def analyze_dataset_task(self, file_path: str, file_id: str):
             'original_file': file_path,
             'cleaned_file_path': cleaned_file_path,
             'metadata': metadata,
-            'ai_decisions': ai_decisions
+            'ai_decisions': ai_decisions,
+            'chart_data': chart_data
         }
         
     except Exception as general_error:
