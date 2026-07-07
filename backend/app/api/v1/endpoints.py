@@ -4,7 +4,8 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 import pandas as pd
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 from celery.result import AsyncResult
 from app.worker.tasks import analyze_dataset_task
@@ -109,8 +110,16 @@ async def chat_with_agent(request: ChatRequest):
     Synapse-AI Entegrasyonu: Yüklenen veya temizlenen veri seti üzerinde
     doğal dil ile soru sorma imkanı sağlar.
     """
-    if "GROQ_API_KEY" not in os.environ:
-        return {"response": "System Error: GROQ_API_KEY bulunamadı. Lütfen .env dosyanızı kontrol edin."}
+    openai_key = os.getenv("OPENAI_API_KEY")
+    google_key = os.getenv("GOOGLE_API_KEY")
+    groq_key = os.getenv("GROQ_API_KEY")
+    
+    if not any([
+        openai_key and openai_key != "your-openai-api-key-here" and openai_key.strip(),
+        google_key and google_key != "your-gemini-api-key-here" and google_key.strip(),
+        groq_key and groq_key.strip()
+    ]):
+        return {"response": "System Error: Geçerli bir API anahtarı (OpenAI, Gemini veya Groq) bulunamadı. Lütfen .env dosyanızı yapılandırın."}
         
     # Dosya yolunu belirle
     search_dir = settings.UPLOAD_DIR
@@ -133,17 +142,40 @@ async def chat_with_agent(request: ChatRequest):
         # Pandas ile oku
         df = pd.read_csv(target_file)
         
-        # LangChain Agent oluştur
-        llm = ChatGroq(api_key=settings.GROQ_API_KEY, temperature=0, model_name="llama-3.3-70b-versatile")
+        # LangChain Agent oluştur (Dinamik LLM Seçimi)
+        if openai_key and openai_key != "your-openai-api-key-here" and openai_key.strip():
+            llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
+            agent_type = "tool-calling"
+        elif google_key and google_key != "your-gemini-api-key-here" and google_key.strip():
+            llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
+            agent_type = "tool-calling"
+        else:
+            from langchain_groq import ChatGroq
+            llm = ChatGroq(model="llama3-70b-8192", temperature=0.0)
+            agent_type = "tool-calling"
         agent = create_pandas_dataframe_agent(
             llm, 
             df, 
             verbose=True, 
-            allow_dangerous_code=True
+            allow_dangerous_code=True,
+            agent_type=agent_type
         )
         
         result = agent.invoke(request.message)
-        return {"response": result["output"]}
+        
+        output = result.get("output", "")
+        if isinstance(output, list):
+            text_parts = []
+            for part in output:
+                if isinstance(part, dict) and "text" in part:
+                    text_parts.append(part["text"])
+                elif isinstance(part, str):
+                    text_parts.append(part)
+            output = "\n".join(text_parts)
+        elif not isinstance(output, str):
+            output = str(output)
+            
+        return {"response": output}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent Hatası: {str(e)}")
