@@ -26,10 +26,20 @@ echo [4/4] Starting React Frontend...
 start cmd /k "cd frontend && npm run dev"
 
 echo.
+echo [5/6] Installing AI API Dependencies...
+cd ai_api
+pip install -r requirements.txt --user
+cd ..
+
+echo.
+echo [6/6] Starting AI_API Microservice...
+start cmd /k "cd ai_api && uvicorn main:app --reload --port 8001"
+
+echo.
 echo ==========================================
 echo Success! 
-echo The backend is running in a new window on port 8000.
-echo The frontend is running in a new window on port 3000.
-echo Note: Celery tasks will run synchronously since LOCAL_MODE=True.
+echo The backend is running on port 8000.
+echo The AI API is running on port 8001.
+echo The frontend is running on port 3000.
 echo ==========================================
 pause
