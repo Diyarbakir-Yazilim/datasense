@@ -6,15 +6,7 @@ import os
 import polars as pl
 from app.core.celery_app import celery_app
 
-# 1. Loglama Yapılandırması (Dosyaya ve Terminale yazar)
-logger = logging.getLogger("data_engine")
-logger.setLevel(logging.INFO)
-
-# Eğer handler'lar daha önce eklenmediyse ekleyelim (Celery reload durumlarında logların yinelenmesini önler)
-if not logger.handlers:
-    file_handler = logging.FileHandler("data_engine.log", encoding="utf-8")
-    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - [FileID: %(file_id)s] - %(message)s"))
-    logger.addHandler(file_handler)
+from app.core.logger import logger
 
 @celery_app.task(bind=True)
 def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: dict = None):

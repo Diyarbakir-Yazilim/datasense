@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.celery_app import celery_app
 import uuid
 from dotenv import load_dotenv
+from app.core.logger import logger
 
 load_dotenv()
 
@@ -35,6 +36,7 @@ async def upload_and_analyze(background_tasks: BackgroundTasks, file: UploadFile
             content = await file.read()
             await out_file.write(content)
     except Exception as e:
+        logger.error(f"Dosya kaydedilemedi: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Dosya kaydedilemedi: {str(e)}")
 
     if settings.LOCAL_MODE:
@@ -70,6 +72,7 @@ async def override_decisions(request: OverrideRequest, background_tasks: Backgro
             break
             
     if not target_file:
+        logger.warning(f"Override başarısız: {request.job_id} için orijinal dosya bulunamadı.")
         raise HTTPException(status_code=404, detail="Orijinal veri dosyası bulunamadı. Lütfen dosyayı tekrar yükleyin.")
 
     new_job_id = str(uuid.uuid4())
@@ -116,25 +119,49 @@ async def get_task_status(job_id: str):
 
 
 @router.get("/download/{job_id}")
-async def download_cleaned_file(job_id: str):
+async def download_cleaned_file(job_id: str, format: str = "csv"):
     """
-    Analiz sonrası temizlenmiş dosyayı indirir.
+    Analiz sonrası temizlenmiş dosyayı indirir (CSV, Excel veya JSON).
     """
     task_result = AsyncResult(job_id, app=celery_app)
     if task_result.state != 'SUCCESS':
+        logger.warning(f"İndirme reddedildi: {job_id} henüz bitmedi veya başarısız.")
         raise HTTPException(status_code=400, detail="İşlem henüz tamamlanmadı veya başarısız oldu.")
     
     result_data = task_result.result
     if 'cleaned_file_path' not in result_data:
+        logger.error(f"Temizlenmiş dosya bilgisi yok: {job_id}")
         raise HTTPException(status_code=404, detail="Temizlenmiş dosya bulunamadı.")
         
     cleaned_path = result_data['cleaned_file_path']
     if os.path.exists(cleaned_path):
+        if format.lower() == "json":
+            try:
+                # Convert to json dynamically
+                if cleaned_path.endswith('.xlsx'):
+                    df = pd.read_excel(cleaned_path)
+                else:
+                    df = pd.read_csv(cleaned_path)
+                json_data = df.to_json(orient='records')
+                # We can return it directly as JSON or a downloadable FileResponse, 
+                # but for big data, FileResponse of a temp json is better.
+                # However, directly returning JSONResponse with appropriate headers is easiest.
+                from fastapi.responses import Response
+                return Response(
+                    content=json_data, 
+                    media_type="application/json", 
+                    headers={"Content-Disposition": f'attachment; filename="cleaned_{job_id}.json"'}
+                )
+            except Exception as e:
+                logger.error(f"JSON çevirme hatası: {str(e)}", exc_info=True)
+                raise HTTPException(status_code=500, detail="Dosya JSON formatına çevrilemedi.")
+                
         is_excel = cleaned_path.endswith('.xlsx')
         media_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if is_excel else 'text/csv'
         filename = f"cleaned_{job_id}.xlsx" if is_excel else f"cleaned_{job_id}.csv"
         return FileResponse(path=cleaned_path, filename=filename, media_type=media_type)
     else:
+        logger.error(f"Temizlenmiş dosya sunucuda yok: {cleaned_path}")
         raise HTTPException(status_code=404, detail="Dosya sunucuda yok.")
 
 class ChatRequest(BaseModel):
@@ -216,4 +243,5 @@ async def chat_with_agent(request: ChatRequest):
         return {"response": output}
         
     except Exception as e:
+        logger.error(f"Agent Hatası: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Agent Hatası: {str(e)}")

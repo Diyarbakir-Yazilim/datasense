@@ -51,8 +51,8 @@ export default function AnalysisDashboard({ jobId }) {
     fetchStatus();
   }, [activeJobId]);
 
-  const handleDownload = () => {
-    window.location.href = `${API_URL}/download/${activeJobId}`;
+  const handleDownload = (format = 'csv') => {
+    window.location.href = `${API_URL}/download/${activeJobId}?format=${format}`;
   };
 
   const handleOverride = async (key, newValue) => {
@@ -104,9 +104,14 @@ export default function AnalysisDashboard({ jobId }) {
         <h2><span className="gradient-text">Otonom Analiz Raporu</span></h2>
         
         {taskData?.cleaned_file_path && (
-          <button className="btn btn-primary" onClick={handleDownload} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FiDownload /> Temizlenmiş Dosyayı İndir
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-primary" onClick={() => handleDownload('csv')} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FiDownload /> İndir (CSV)
+            </button>
+            <button className="btn btn-primary" onClick={() => handleDownload('json')} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FiDownload /> İndir (JSON)
+            </button>
+          </div>
         )}
       </div>
 
