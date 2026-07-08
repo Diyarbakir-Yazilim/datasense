@@ -36,11 +36,14 @@ services:
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-true}
     depends_on:
       redis:
         condition: service_healthy
     volumes:
       - upload_data:/app/uploads
+      - ./logs:/app/logs
     restart: unless-stopped
 
   # ─── Celery Worker (Asenkron Görev İşleyici) ──────────────────
@@ -57,6 +60,8 @@ services:
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-true}
     depends_on:
       redis:
         condition: service_healthy
@@ -64,6 +69,7 @@ services:
         condition: service_started
     volumes:
       - upload_data:/app/uploads
+      - ./logs:/app/logs
     restart: unless-stopped
 
   # ─── AI API (Veri/Karar Motoru) ────────────────────────────────

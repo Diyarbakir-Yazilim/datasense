@@ -1,5 +1,6 @@
 import logging
 import sys
+import os
 
 def setup_logger(name: str = "datasense") -> logging.Logger:
     logger = logging.getLogger(name)
@@ -16,8 +17,10 @@ def setup_logger(name: str = "datasense") -> logging.Logger:
         console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
 
-        # File Handler
-        file_handler = logging.FileHandler("datasense_backend.log", encoding="utf-8")
+        # File Handler - Kalıcı log dizinini oluştur
+        log_dir = "logs"
+        os.makedirs(log_dir, exist_ok=True)
+        file_handler = logging.FileHandler(os.path.join(log_dir, "datasense_backend.log"), encoding="utf-8")
         file_handler.setLevel(logging.INFO)
         file_formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
