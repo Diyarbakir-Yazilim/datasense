@@ -1,4 +1,4 @@
-import React from 'react';
+
 import ReactECharts from 'echarts-for-react';
 import { FiBarChart2 } from 'react-icons/fi';
 
