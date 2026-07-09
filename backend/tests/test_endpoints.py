@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import patch, MagicMock
 
 def test_analyze_invalid_file(client):

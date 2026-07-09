@@ -21,3 +21,5 @@ polars
 fastexcel
 pyarrow
 xlsxwriter
+langsmith
+pytest-asyncio
