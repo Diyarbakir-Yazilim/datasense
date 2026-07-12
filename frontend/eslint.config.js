@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import reactPlugin from "eslint-plugin-react";
 
 export default [
   js.configs.recommended,
@@ -7,6 +8,9 @@ export default [
   },
   {
     files: ["**/*.{js,jsx}"],
+    plugins: {
+      react: reactPlugin
+    },
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
@@ -26,8 +30,15 @@ export default [
       }
     },
     rules: {
+      ...reactPlugin.configs.recommended.rules,
+      ...reactPlugin.configs["jsx-runtime"].rules,
       "no-unused-vars": "warn",
       "react/prop-types": "off"
+    },
+    settings: {
+      react: {
+        version: "detect"
+      }
     }
   }
 ];

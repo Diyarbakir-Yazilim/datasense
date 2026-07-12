@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import AnalysisDashboard from './components/AnalysisDashboard';
 import UploadArea from './components/UploadArea';
 
