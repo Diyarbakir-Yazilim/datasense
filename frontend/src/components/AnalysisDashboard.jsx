@@ -82,7 +82,7 @@ export default function AnalysisDashboard({ jobId }) {
             setLoading(false);
           } else if (statusRes.data.state === 'FAILURE') {
             clearInterval(pollInterval);
-            window.alert("Override işlemi başarısız oldu.");
+            window.alert("Override failed.");
             setLoading(false);
           }
         } catch (e) {
@@ -91,25 +91,25 @@ export default function AnalysisDashboard({ jobId }) {
       }, 2000);
       
     } catch (err) {
-      console.error("Override hatası:", err);
+      console.error("Override error:", err);
       setLoading(false);
     }
   };
 
-  if (loading) return <div className="fade-in" style={{ textAlign: 'center', padding: '50px' }}>Yükleniyor...</div>;
+  if (loading) return <div className="fade-in" style={{ textAlign: 'center', padding: '50px' }}>Loading...</div>;
 
   return (
     <div className="fade-in">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2><span className="gradient-text">Otonom Analiz Raporu</span></h2>
+        <h2><span className="gradient-text">Autonomous Analysis Report</span></h2>
         
         {taskData?.cleaned_file_path && (
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="btn btn-primary" onClick={() => handleDownload('csv')} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <FiDownload /> İndir (CSV)
+              <FiDownload /> Download (CSV)
             </button>
             <button className="btn btn-primary" onClick={() => handleDownload('json')} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <FiDownload /> İndir (JSON)
+              <FiDownload /> Download (JSON)
             </button>
           </div>
         )}
@@ -119,24 +119,24 @@ export default function AnalysisDashboard({ jobId }) {
         <div className="dashboard-sidebar">
           <div className="glass-panel">
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-              <FiServer className="gradient-text" /> Veri Profili
+              <FiServer className="gradient-text" /> Data Profile
             </h3>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Satır Sayısı</span>
-              <span style={{ fontWeight: '600' }}>{taskData?.metadata?.num_rows || 'Bilinmiyor'}</span>
+              <span style={{ color: 'var(--text-secondary)' }}>Row Count</span>
+              <span style={{ fontWeight: '600' }}>{taskData?.metadata?.num_rows || 'Unknown'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Sütun Sayısı</span>
-              <span style={{ fontWeight: '600' }}>{taskData?.metadata?.num_cols || 'Bilinmiyor'}</span>
+              <span style={{ color: 'var(--text-secondary)' }}>Column Count</span>
+              <span style={{ fontWeight: '600' }}>{taskData?.metadata?.num_cols || 'Unknown'}</span>
             </div>
           </div>
 
           <div className="glass-panel">
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-              <FiActivity className="gradient-text" /> Sistem Kararı
+              <FiActivity className="gradient-text" /> System Decision
             </h3>
             <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-              {taskData?.ai_decisions?.reasoning || 'Yapay zeka analiz raporu bekleniyor...'}
+              {taskData?.ai_decisions?.reasoning || 'Waiting for AI analysis report...'}
             </p>
           </div>
         </div>
@@ -145,19 +145,19 @@ export default function AnalysisDashboard({ jobId }) {
           {taskData?.ai_decisions ? (
             <div className="decision-grid">
               <DecisionCard 
-                title="Hedef Değişken (Target)" 
+                title="Target Variable" 
                 value={taskData.ai_decisions.target_column} 
                 tagColor="tag-blue"
                 onOverride={(val) => handleOverride('target_column', val)}
               />
               <DecisionCard 
-                title="Makine Öğrenmesi Tipi" 
+                title="Machine Learning Task" 
                 value={taskData.ai_decisions.task_type} 
                 tagColor="tag-purple"
                 onOverride={(val) => handleOverride('task_type', val)}
               />
               <DecisionCard 
-                title="Eksik Veri Stratejisi" 
+                title="Missing Value Strategy" 
                 value={taskData.ai_decisions.missing_value_strategy} 
                 tagColor="tag-yellow"
                 onOverride={(val) => handleOverride('missing_value_strategy', val)}
@@ -165,7 +165,7 @@ export default function AnalysisDashboard({ jobId }) {
             </div>
           ) : (
             <div className="glass-panel" style={{ textAlign: 'center', padding: '40px' }}>
-              Yapay Zeka Kararları Bulunamadı.
+              AI Decisions Not Found.
             </div>
           )}
           

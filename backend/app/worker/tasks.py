@@ -13,14 +13,14 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
     Refactored data processing task using Polars for high performance profiling,
     metadata extraction, and optimized memory management. Includes advanced error handling.
     """
-    # Loglara file_id enjekte etmek için extra parametresi kullanıyoruz
+    # Inject file_id into logs via extra parameter
     log_extra = {"file_id": file_id}
-    logger.info(f"Veri işleme görevi başlatıldı. Yol: {file_path}", extra=log_extra)
+    logger.info(f"Data processing task started. Path: {file_path}", extra=log_extra)
     
-    self.update_state(state='PROGRESS', meta={'current': 10, 'total': 100, 'status': 'Dosya okunuyor...'})
+    self.update_state(state='PROGRESS', meta={'current': 10, 'total': 100, 'status': 'Reading file...'})
     
     try:
-        # --- 1. DOSYA OKUMA VE KONTROL ADIMI ---
+        # --- 1. FILE READING AND VALIDATION STEP ---
         try:
             if file_path.endswith('.csv'):
                 df_lazy = pl.scan_csv(file_path, ignore_errors=True, infer_schema_length=10000, null_values=["|", "NA", "N/A", "null", "", "?", "-"])
@@ -44,28 +44,28 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
                 num_cols = df_eager.width
                 columns_list = df_eager.columns
             else:
-                raise ValueError(f"Desteklenmeyen dosya formatı: {file_path}")
+                raise ValueError(f"Unsupported file format: {file_path}")
 
         except FileNotFoundError as fnf_err:
-            logger.error(f"Kritik Hata: Dosya sunucuda bulunamadı: {str(fnf_err)}", extra=log_extra)
-            self.update_state(state='FAILED_TASK', meta={'status': 'Hata: İşlenecek dosya bulunamadı.'})
+            logger.error(f"Critical Error: File not found on server: {str(fnf_err)}", extra=log_extra)
+            self.update_state(state='FAILED_TASK', meta={'status': 'Error: Target file not found.'})
             return {"status": "FAILED", "error": "File not found"}
             
         except Exception as read_err:
-            logger.error(f"Kritik Hata: Dosya okunurken yapısal sorun oluştu: {str(read_err)}", extra=log_extra)
-            self.update_state(state='FAILED_TASK', meta={'status': 'Hata: Dosya okunamadı, formatı bozuk olabilir.'})
+            logger.error(f"Critical Error: Structural issue while reading file: {str(read_err)}", extra=log_extra)
+            self.update_state(state='FAILED_TASK', meta={'status': 'Error: Could not read file, format might be corrupted.'})
             return {"status": "FAILED", "error": "Read error"}
 
-        # Veri seti boş mu kontrolü
+        # Check if dataset is empty
         if num_rows == 0:
-            logger.warning("Uyarı: Okunan veri setinde hiç satır bulunamadı (Boş veri).", extra=log_extra)
-            self.update_state(state='FAILED_TASK', meta={'status': 'Hata: Yüklenen dosya içeriği boş.'})
+            logger.warning("Warning: No rows found in the loaded dataset (Empty data).", extra=log_extra)
+            self.update_state(state='FAILED_TASK', meta={'status': 'Error: Uploaded file is empty.'})
             return {"status": "FAILED", "error": "Empty dataset"}
 
-        self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Metadata çıkarılıyor...'})
-        time.sleep(1) # Simülasyon efekti
+        self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Extracting metadata...'})
+        time.sleep(1) # Simulation effect
         
-        # --- 2. METADATA VE İSTATİSTİK ADIMI ---
+        # --- 2. METADATA AND STATISTICS STEP ---
         metadata = {
             "num_rows": num_rows,
             "num_cols": num_cols,
@@ -91,17 +91,17 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
                 }
                 metadata["columns"].append(col_info)
         except pl.exceptions.ComputeError as comp_err:
-            logger.error(f"Polars İstatistik Hesaplama Hatası: {str(comp_err)}", extra=log_extra)
-            self.update_state(state='FAILED_TASK', meta={'status': 'Hata: Sütun istatistikleri hesaplanamadı.'})
+            logger.error(f"Polars Statistics Computation Error: {str(comp_err)}", extra=log_extra)
+            self.update_state(state='FAILED_TASK', meta={'status': 'Error: Could not calculate column statistics.'})
             return {"status": "FAILED", "error": "Computation error in metadata"}
             
-        self.update_state(state='PROGRESS', meta={'current': 60, 'total': 100, 'status': 'AI Engine ile iletişime geçiliyor...'})
-        time.sleep(1) # Simülasyon efekti
+        self.update_state(state='PROGRESS', meta={'current': 60, 'total': 100, 'status': 'Contacting AI Engine...'})
+        time.sleep(1) # Simulation effect
         
-        # --- AI_API entegrasyonu VEYA Override Kararları ---
+        # --- AI_API integration OR Override Decisions ---
         try:
             if manual_decisions:
-                logger.info("Manuel düzenleme (Override) algılandı. AI motoru atlanıyor.", extra=log_extra)
+                logger.info("Manual override detected. Skipping AI engine.", extra=log_extra)
                 ai_decisions = manual_decisions
                 prompt_version = "override"
             else:
@@ -115,17 +115,17 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
                 ai_decisions = response.json()
                 
                 prompt_version = ai_decisions.get("prompt_version", "unknown")
-                logger.info(f"A/B Test - Kullanılan Prompt Versiyonu: {prompt_version}", extra=log_extra)
+                logger.info(f"A/B Test - Prompt Version Used: {prompt_version}", extra=log_extra)
         except Exception as ai_err:
-            logger.error(f"AI API ile iletişim kurulamadı: {str(ai_err)}", extra=log_extra)
-            self.update_state(state='FAILED_TASK', meta={'status': 'Hata: Karar motoruna (AI) ulaşılamadı.'})
+            logger.error(f"Could not communicate with AI API: {str(ai_err)}", extra=log_extra)
+            self.update_state(state='FAILED_TASK', meta={'status': 'Error: Could not reach decision engine (AI).'})
             return {"status": "FAILED", "error": "AI Engine connection error"}
         
-        self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Veri temizleme uygulanıyor...'})
+        self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Applying data cleaning...'})
         
-        # --- 3. VERİ TEMİZLEME VE DİSKE YAZMA ADIMI ---
+        # --- 3. DATA CLEANING AND WRITING STEP ---
         try:
-            # 1. Sütunları Düşürme (Drop)
+            # 1. Dropping Columns
             columns_to_drop = ai_decisions.get("columns_to_drop", [])
             if columns_to_drop:
                 existing_cols_to_drop = [col for col in columns_to_drop if col in columns_list]
@@ -134,7 +134,7 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
                     schema.pop(col, None)
                     columns_list.remove(col)
                     
-            # 2. Eksik Veri Doldurma (Imputation)
+            # 2. Missing Value Imputation
             missing_strategy = ai_decisions.get("missing_value_strategy") or {}
             cleaning_expressions = []
             
@@ -142,17 +142,17 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
                 if col not in columns_list:
                     continue
                 
-                # Sütunun boşluk sayısını bul
+                # Find missing count for the column
                 missing_cnt = next((c["missing_count"] for c in metadata["columns"] if c["name"] == col), 0)
                 if missing_cnt == 0:
                     continue
                 
-                # Eğer tüm sütun null ise ortalama/medyan alınamaz, 0 ile doldur
+                # If entire column is null, mean/median cannot be calculated, fill with 0
                 if missing_cnt == num_rows:
                     cleaning_expressions.append(pl.col(col).fill_null(0))
                     continue
                 
-                # Strateji Uygulama
+                # Apply strategy
                 is_num = schema[col].is_numeric()
                 if strategy == "mean" and is_num:
                     cleaning_expressions.append(pl.col(col).fill_null(pl.col(col).mean()))
@@ -174,7 +174,7 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
                 
             if cleaned_file_path.endswith('.csv'):
                 df_lazy.sink_csv(cleaned_file_path)
-                # Grafikler için RAM'i korumak adına ilk 10.000 satırı (veya tamamını) alıyoruz
+                # Take first 10k rows (or all) to protect RAM for charts
                 if num_rows > 10000:
                     final_df = df_lazy.head(10000).collect()
                 else:
@@ -187,12 +187,12 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
                     final_df.to_pandas().to_excel(cleaned_file_path, index=False)
             
         except Exception as clean_err:
-            logger.error(f"Veri temizleme veya diske yazma hatası: {str(clean_err)}", extra=log_extra)
-            self.update_state(state='FAILED_TASK', meta={'status': 'Hata: Veri temizleme adımı başarısız oldu.'})
+            logger.error(f"Error during data cleaning or disk write: {str(clean_err)}", extra=log_extra)
+            self.update_state(state='FAILED_TASK', meta={'status': 'Error: Data cleaning step failed.'})
             return {"status": "FAILED", "error": "Cleaning or saving error"}
         
-        # --- 4. GRAFİK (CHART) VERİSİ HAZIRLAMA ---
-        self.update_state(state='PROGRESS', meta={'current': 90, 'total': 100, 'status': 'Grafikler hesaplanıyor...'})
+        # --- 4. PREPARING CHART DATA ---
+        self.update_state(state='PROGRESS', meta={'current': 90, 'total': 100, 'status': 'Calculating charts...'})
         
         chart_data = {
             "correlation_matrix": None,
@@ -200,7 +200,7 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
         }
         
         try:
-            # 4.1 Korelasyon Matrisi (#51)
+            # 4.1 Correlation Matrix (#51)
             numeric_cols = [col for col in final_df.columns if final_df.schema[col].is_numeric()]
             if len(numeric_cols) > 1:
                 corr_df = final_df.select(numeric_cols).corr().fill_nan(0).fill_null(0)
@@ -209,7 +209,7 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
                     "values": corr_df.to_numpy().tolist()
                 }
                 
-                # Top correlated pair scatter plot (# Faz 4+)
+                # Top correlated pair scatter plot (# Phase 4+)
                 try:
                     corr_np = corr_df.to_numpy()
                     max_corr = -1
@@ -234,9 +234,9 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
                             "correlation": float(max_corr)
                         }
                 except Exception as e:
-                    logger.warning(f"Scatter plot verisi hesaplanamadı: {e}", extra=log_extra)
+                    logger.warning(f"Could not calculate scatter plot data: {e}", extra=log_extra)
                 
-            # 4.2 Dağılım Grafiği (#50)
+            # 4.2 Distribution Chart (#50)
             target_col = ai_decisions.get("target_column")
             task_type = ai_decisions.get("task_type")
             
@@ -267,10 +267,10 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
                         "values": sample_df.get_column(target_col).to_list()
                     }
         except Exception as chart_err:
-            logger.error(f"Grafik verisi hesaplama hatası: {str(chart_err)}", extra=log_extra)
+            logger.error(f"Error calculating chart data: {str(chart_err)}", extra=log_extra)
             
-        self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100, 'status': 'İşlem Tamamlandı!'})
-        logger.info("Veri motoru tüm işlemleri başarıyla tamamladı.", extra=log_extra)
+        self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100, 'status': 'Process Completed!'})
+        logger.info("Data engine successfully completed all operations.", extra=log_extra)
         
         return {
             'status': 'Task completed successfully!',
@@ -282,7 +282,7 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
         }
         
     except Exception as general_error:
-        # Beklenmedik en dıştaki tüm hataları yakalar, Celery worker'ın çökmesini önler
-        logger.critical(f"SİSTEM ÇÖKMESİ ENGELLENDİ: {str(general_error)}", extra=log_extra)
-        self.update_state(state='FAILED_TASK', meta={'status': f'Hata: {str(general_error)}'})
+        # Catch unexpected outer errors to prevent Celery worker crash
+        logger.critical(f"SYSTEM CRASH PREVENTED: {str(general_error)}", extra=log_extra)
+        self.update_state(state='FAILED_TASK', meta={'status': f'Error: {str(general_error)}'})
         return {"status": "FAILED", "error": str(general_error)}

@@ -9,7 +9,7 @@ export default function App() {
     <div className="app-container">
       <div className="header fade-in">
         <h1>DataSense <span className="gradient-text">Premium</span></h1>
-        <p>Otonom Veri Analisti & Karar Destek Sistemi</p>
+        <p>Autonomous Data Analyst & Decision Support System</p>
       </div>
       
       {!jobId ? (
