@@ -1,94 +1,96 @@
-# DataSense 🧠
+<div align="center">
+  <h1>🧠 DataSense</h1>
+  <p><b>An LLM-powered autonomous agent for intelligent data cleaning, EDA, and preprocessing.</b></p>
+  
+  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+  [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
+  [![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/)
+  [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+  [![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=flat&logo=terraform&logoColor=white)](https://www.terraform.io/)
+</div>
 
-![DataSense Cover](/C:/Users/mahsu/.gemini/antigravity/brain/16f7dc52-7317-4873-94ea-0641760fbb13/datasense_cover_1781082140128.png)
+---
 
-**An LLM-powered autonomous agent for intelligent data cleaning, EDA, and preprocessing.**
-
-DataSense automates the essential stages of the data science workflow. Upload raw data, and our AI agent will autonomously analyze, clean, and prepare your files for machine learning tasks
+DataSense automates the essential stages of the data science workflow. Upload raw data, and our AI agent will autonomously analyze, clean, and prepare your files for machine learning tasks while preventing Out-of-Memory (OOM) errors via chunk-based processing.
 
 ## 🚀 Key Features
+
 - **AI-Powered Cleaning:** Intelligent handling of missing values and data inconsistencies.
-- **Task Identification:** Automatic detection of classification or regression problem types.
 - **Automated EDA:** Data profiling and dynamic visualization generation.
-- **Privacy-Centric:** Only metadata is processed by the LLM to ensure data security.
+- **Privacy-Centric:** Only metadata is processed by the LLM (LangChain/Groq) to ensure data security.
+- **OOM Protection:** Large gigabyte-scale datasets are processed safely using 10MB chunk-based streaming and `Polars` LazyFrames.
+- **Production-Ready:** Includes a built-in Locust load testing suite and Terraform templates for 1-click cloud deployment.
 
 ## 🏗️ System Architecture & Data Flow
 
 ```mermaid
 sequenceDiagram
-    participant User as 👤 Kullanıcı
+    participant User as 👤 User
     participant UI as 🖥️ Frontend (React)
     participant API as ⚙️ Backend (FastAPI)
     participant Worker as 🛠️ Celery Worker
     participant LLM as 🧠 AI Engine (LangChain)
 
-    User->>UI: CSV Dosyası Yükler
-    UI->>API: POST /api/v1/analyze (multipart/form-data)
-    API->>API: Dosyayı Diske/S3'e Kaydet
-    API->>Worker: Asenkron Görev Başlat (Celery)
+    User->>UI: Uploads CSV/Excel File
+    UI->>API: POST /api/v1/analyze (Chunked Stream)
+    API->>API: Save File to Disk safely
+    API->>Worker: Trigger Async Task
     API-->>UI: 202 Accepted (job_id)
     
     UI->>API: GET /api/v1/status/{job_id} (Polling)
     
-    Worker->>Worker: Pandas ile Metadata Çıkar (Schema, NaN counts)
-    Worker->>LLM: Sadece Metadata Gönder (Veri Gizliliği)
-    LLM-->>Worker: Temizleme & Analiz Kararları (JSON)
-    Worker->>Worker: Kararları Fiziksel Veriye Uygula
-    Worker->>API: İşlem Tamamlandı, Raporu Kaydet
+    Worker->>Worker: Extract Metadata (Schema, NaN counts)
+    Worker->>LLM: Send ONLY Metadata (Privacy First)
+    LLM-->>Worker: Cleaning & Analysis Decisions (JSON)
+    Worker->>Worker: Apply decisions physically to data
+    Worker->>API: Task Completed, Save Report
     
-    API-->>UI: 200 OK (status: completed, download_url)
-    UI->>User: Raporu ve Grafikleri Göster
-    User->>API: Temizlenmiş CSV'yi İndir
+    API-->>UI: 200 OK (status: completed)
+    User->>API: Download Cleaned File
 ```
 
 ## 🛠 Tech Stack
-- **Backend:** FastAPI
-- **AI Engine:** LangChain + Gemini API
-- **Data Processing:** Pandas/Polars
+- **Backend:** FastAPI, Python 3.11
+- **AI Engine:** LangChain + Gemini / Groq API
+- **Data Processing:** Pandas & Polars
 - **Task Queue:** Celery + Redis
+- **Load Testing:** Locust
+- **Infrastructure:** Docker, Terraform (AWS)
 
 ## 💻 Getting Started
 
 ### Prerequisites
 - Docker & Docker Compose
-- OpenAI / Gemini API Keys
+- API Keys (Groq / OpenAI / Gemini)
 
-### Installation & Running Locally (with Docker)
+### 1. Local Development (Docker)
+The easiest way to run DataSense is using Docker Compose.
 
-The easiest way to run the entire DataSense stack is using Docker Compose. This will automatically build and link the Frontend, Backend, AI Engine, Celery Worker, and Redis container.
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Diyarbakir-Yazilim/datasense.git
-   cd datasense
-   ```
-
-2. **Environment Variables:**
-   Rename `.env.example` to `.env` and fill in your API keys (e.g., GROQ_API_KEY, OPENAI_API_KEY):
-   ```bash
-   cp .env.example .env
-   ```
-
-3. **Run the application (Docker):**
-   Execute the following command in the root directory to build and start all services:
-   ```bash
-   docker-compose up --build
-   ```
-   *Note: If you want to run it in the background, add the `-d` flag: `docker-compose up --build -d`*
-
-Once the containers are running:
-- **Frontend (UI)** will be available at: http://localhost:3000
-- **Backend (API)** will be available at: http://localhost:8000/docs
-
-### 🛑 Stopping the Application
-To stop all services and preserve data:
 ```bash
-docker-compose stop
+git clone https://github.com/Diyarbakir-Yazilim/datasense.git
+cd datasense
+
+# Setup Environment Variables
+cp .env.example .env
+
+# Build and Start
+docker-compose up --build -d
 ```
-To shut down completely and remove containers:
-```bash
-docker-compose down
-```
+- **UI:** http://localhost:3000
+- **API Docs:** http://localhost:8000/docs
+- **Locust Load Tests:** http://localhost:8089
+
+### 2. Production Deployment (Infrastructure as Code)
+DataSense includes a complete "Production Deployment Kit" for AWS.
+
+1. Configure your AWS CLI credentials.
+2. Navigate to the terraform directory:
+   ```bash
+   cd terraform/aws
+   terraform init
+   terraform apply
+   ```
+3. Once the EC2 instance is up, SSH into the server and run the included `deploy.sh` script to automatically start the `docker-compose.prod.yml` optimized production stack.
 
 ---
-*Autonomous Data Analysis Pipeline.*
+*Maintained by the Open Source Community.*

@@ -22,10 +22,10 @@ router = APIRouter()
 @router.post("/analyze")
 async def upload_and_analyze(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """
-    Kullanıcıdan dosyayı alır, geçici alana kaydeder ve Celery işçisine gönderir.
+    Receives file from user, saves to temp area and dispatches to Celery worker.
     """
     if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="Sadece CSV veya Excel dosyaları desteklenmektedir.")
+        raise HTTPException(status_code=400, detail="Only CSV or Excel files are supported.")
 
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     file_id = str(uuid.uuid4())
@@ -39,8 +39,8 @@ async def upload_and_analyze(background_tasks: BackgroundTasks, file: UploadFile
                     break
                 await out_file.write(chunk)
     except Exception as e:
-        logger.error(f"Dosya kaydedilemedi: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Dosya kaydedilemedi: {str(e)}")
+        logger.error(f"Failed to save file: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
     if settings.LOCAL_MODE:
         background_tasks.add_task(analyze_dataset_task.apply_async, args=[file_path, file_id], task_id=file_id)
@@ -52,7 +52,7 @@ async def upload_and_analyze(background_tasks: BackgroundTasks, file: UploadFile
     return JSONResponse(status_code=202, content={
         "job_id": job_id,
         "status": "queued",
-        "message": "Dosya kuyruğa eklendi. Analiz başlıyor."
+        "message": "File queued. Analysis starting."
     })
 
 
@@ -63,8 +63,8 @@ class OverrideRequest(BaseModel):
 @router.post("/override")
 async def override_decisions(request: OverrideRequest, background_tasks: BackgroundTasks):
     """
-    Kullanıcının manuel olarak değiştirdiği kararları alır ve
-    AI adımını atlayarak veri temizleme işlemlerini baştan başlatır.
+    Takes user's manual override decisions and restarts data cleaning,
+    skipping the AI step.
     """
     search_dir = settings.UPLOAD_DIR
     target_file = None
@@ -75,8 +75,8 @@ async def override_decisions(request: OverrideRequest, background_tasks: Backgro
             break
             
     if not target_file:
-        logger.warning(f"Override başarısız: {request.job_id} için orijinal dosya bulunamadı.")
-        raise HTTPException(status_code=404, detail="Orijinal veri dosyası bulunamadı. Lütfen dosyayı tekrar yükleyin.")
+        logger.warning(f"Override failed: original file not found for {request.job_id}.")
+        raise HTTPException(status_code=404, detail="Original data file not found. Please upload again.")
 
     new_job_id = str(uuid.uuid4())
     
@@ -89,21 +89,21 @@ async def override_decisions(request: OverrideRequest, background_tasks: Backgro
     return JSONResponse(status_code=202, content={
         "job_id": new_job_id,
         "status": "queued",
-        "message": "Manuel kararlar alındı. Analiz yeniden başlatılıyor."
+        "message": "Manual decisions received. Restarting analysis."
     })
 
 
 @router.get("/status/{job_id}")
 async def get_task_status(job_id: str):
     """
-    Celery görev durumunu döndürür.
+    Returns Celery task status.
     """
     task_result = AsyncResult(job_id, app=celery_app)
     
     if task_result.state == 'PENDING':
         response = {
             "state": task_result.state,
-            "status": "Görev sırada bekliyor..."
+            "status": "Task waiting in queue..."
         }
     elif task_result.state != 'FAILURE':
         response = {
@@ -124,17 +124,17 @@ async def get_task_status(job_id: str):
 @router.get("/download/{job_id}")
 async def download_cleaned_file(job_id: str, format: str = "csv"):
     """
-    Analiz sonrası temizlenmiş dosyayı indirir (CSV, Excel veya JSON).
+    Downloads cleaned file (CSV, Excel or JSON) after analysis.
     """
     task_result = AsyncResult(job_id, app=celery_app)
     if task_result.state != 'SUCCESS':
-        logger.warning(f"İndirme reddedildi: {job_id} henüz bitmedi veya başarısız.")
-        raise HTTPException(status_code=400, detail="İşlem henüz tamamlanmadı veya başarısız oldu.")
+        logger.warning(f"Download denied: {job_id} incomplete or failed.")
+        raise HTTPException(status_code=400, detail="Process incomplete or failed.")
     
     result_data = task_result.result
     if 'cleaned_file_path' not in result_data:
-        logger.error(f"Temizlenmiş dosya bilgisi yok: {job_id}")
-        raise HTTPException(status_code=404, detail="Temizlenmiş dosya bulunamadı.")
+        logger.error(f"No cleaned file info: {job_id}")
+        raise HTTPException(status_code=404, detail="Cleaned file not found.")
         
     cleaned_path = result_data['cleaned_file_path']
     if os.path.exists(cleaned_path):
@@ -169,16 +169,16 @@ async def download_cleaned_file(job_id: str, format: str = "csv"):
                     headers={"Content-Disposition": f'attachment; filename="cleaned_{job_id}.json"'}
                 )
             except Exception as e:
-                logger.error(f"JSON çevirme hatası: {str(e)}", exc_info=True)
-                raise HTTPException(status_code=500, detail="Dosya JSON formatına çevrilemedi.")
+                logger.error(f"JSON conversion error: {str(e)}", exc_info=True)
+                raise HTTPException(status_code=500, detail="Failed to convert file to JSON.")
                 
         is_excel = cleaned_path.endswith('.xlsx')
         media_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if is_excel else 'text/csv'
         filename = f"cleaned_{job_id}.xlsx" if is_excel else f"cleaned_{job_id}.csv"
         return FileResponse(path=cleaned_path, filename=filename, media_type=media_type)
     else:
-        logger.error(f"Temizlenmiş dosya sunucuda yok: {cleaned_path}")
-        raise HTTPException(status_code=404, detail="Dosya sunucuda yok.")
+        logger.error(f"Cleaned file missing on server: {cleaned_path}")
+        raise HTTPException(status_code=404, detail="File missing on server.")
 
 class ChatRequest(BaseModel):
     job_id: str
@@ -188,8 +188,8 @@ class ChatRequest(BaseModel):
 @router.post("/chat")
 async def chat_with_agent(request: ChatRequest):
     """
-    Synapse-AI Entegrasyonu: Yüklenen veya temizlenen veri seti üzerinde
-    doğal dil ile soru sorma imkanı sağlar.
+    Synapse-AI Integration: Provides natural language querying 
+    over the uploaded or cleaned dataset.
     """
     openai_key = os.getenv("OPENAI_API_KEY")
     google_key = os.getenv("GOOGLE_API_KEY")
@@ -200,13 +200,13 @@ async def chat_with_agent(request: ChatRequest):
         google_key and google_key != "your-gemini-api-key-here" and google_key.strip(),
         groq_key and groq_key.strip()
     ]):
-        return {"response": "System Error: Geçerli bir API anahtarı (OpenAI, Gemini veya Groq) bulunamadı. Lütfen .env dosyanızı yapılandırın."}
+        return {"response": "System Error: No valid API key (OpenAI, Gemini or Groq) found. Please configure your .env file."}
         
-    # Dosya yolunu belirle
+    # Determine file path
     search_dir = settings.UPLOAD_DIR
     target_file = None
     
-    # Tüm dosyaları tara ve job_id ile eşleşen dosyayı bul
+    # Scan files to match job_id
     for f in os.listdir(search_dir):
         if request.job_id in f:
             if request.use_cleaned_data and "_cleaned.csv" in f:
@@ -217,13 +217,13 @@ async def chat_with_agent(request: ChatRequest):
                 break
                 
     if not target_file:
-        raise HTTPException(status_code=404, detail="Belirtilen job_id için dosya bulunamadı.")
+        raise HTTPException(status_code=404, detail="File not found for specified job_id.")
         
     try:
-        # Pandas ile oku (OOM önlemi için ilk 10.000 satır alınır)
+        # Read with Pandas (limit to 10k rows for OOM protection)
         df = pd.read_csv(target_file, nrows=10000)
         
-        # LangChain Agent oluştur (Dinamik LLM Seçimi)
+        # Create LangChain Agent (Dynamic LLM Selection)
         if openai_key and openai_key != "your-openai-api-key-here" and openai_key.strip():
             llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
             agent_type = "tool-calling"
@@ -259,5 +259,5 @@ async def chat_with_agent(request: ChatRequest):
         return {"response": output}
         
     except Exception as e:
-        logger.error(f"Agent Hatası: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Agent Hatası: {str(e)}")
+        logger.error(f"Agent Error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Agent Error: {str(e)}")
