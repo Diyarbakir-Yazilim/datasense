@@ -1,0 +1,90 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: datasense_redis_prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: datasense_backend_prod
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - AI_API_URL=http://ai_api:8001
+      - UPLOAD_DIR=/app/uploads
+      - DEBUG=false
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - upload_data_prod:/app/uploads
+    restart: always
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: datasense_worker_prod
+    command: celery -A app.core.celery_app worker --loglevel=warning --concurrency=4 -Q main-queue
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - AI_API_URL=http://ai_api:8001
+      - UPLOAD_DIR=/app/uploads
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    volumes:
+      - upload_data_prod:/app/uploads
+    restart: always
+
+  ai_api:
+    build:
+      context: ./ai_api
+      dockerfile: Dockerfile
+    container_name: datasense_ai_api_prod
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: datasense_frontend_prod
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=/api/v1 # Assumes a reverse proxy (like Nginx) routes /api to backend:8000
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  redis_data_prod:
+    driver: local
+  upload_data_prod:
+    driver: local
