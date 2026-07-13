@@ -100,6 +100,18 @@ services:
       - backend
     restart: unless-stopped
 
+  # ─── Yük Testi (Locust) ────────────────────────────────────────
+  locust:
+    image: locustio/locust
+    container_name: datasense_locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./backend/tests:/mnt/locust
+    command: -f /mnt/locust/locustfile.py --host http://backend:8000
+    depends_on:
+      - backend
+
 volumes:
   redis_data:
     driver: local

@@ -172,14 +172,19 @@ def analyze_dataset_task(self, file_path: str, file_id: str, manual_decisions: d
             if cleaning_expressions:
                 df_lazy = df_lazy.with_columns(cleaning_expressions)
                 
-            final_df = df_lazy.collect()
-            if cleaned_file_path.endswith('.xlsx'):
+            if cleaned_file_path.endswith('.csv'):
+                df_lazy.sink_csv(cleaned_file_path)
+                # Grafikler için RAM'i korumak adına ilk 10.000 satırı (veya tamamını) alıyoruz
+                if num_rows > 10000:
+                    final_df = df_lazy.head(10000).collect()
+                else:
+                    final_df = df_lazy.collect()
+            else:
+                final_df = df_lazy.collect()
                 try:
                     final_df.write_excel(cleaned_file_path)
                 except Exception:
                     final_df.to_pandas().to_excel(cleaned_file_path, index=False)
-            else:
-                final_df.write_csv(cleaned_file_path)
             
         except Exception as clean_err:
             logger.error(f"Veri temizleme veya diske yazma hatası: {str(clean_err)}", extra=log_extra)

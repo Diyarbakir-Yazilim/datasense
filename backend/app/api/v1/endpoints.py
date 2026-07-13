@@ -33,8 +33,11 @@ async def upload_and_analyze(background_tasks: BackgroundTasks, file: UploadFile
 
     try:
         async with aiofiles.open(file_path, 'wb') as out_file:
-            content = await file.read()
-            await out_file.write(content)
+            while True:
+                chunk = await file.read(10 * 1024 * 1024) # 10MB chunks
+                if not chunk:
+                    break
+                await out_file.write(chunk)
     except Exception as e:
         logger.error(f"Dosya kaydedilemedi: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Dosya kaydedilemedi: {str(e)}")
@@ -137,18 +140,31 @@ async def download_cleaned_file(job_id: str, format: str = "csv"):
     if os.path.exists(cleaned_path):
         if format.lower() == "json":
             try:
-                # Convert to json dynamically
-                if cleaned_path.endswith('.xlsx'):
-                    df = pd.read_excel(cleaned_path)
-                else:
-                    df = pd.read_csv(cleaned_path)
-                json_data = df.to_json(orient='records')
-                # We can return it directly as JSON or a downloadable FileResponse, 
-                # but for big data, FileResponse of a temp json is better.
-                # However, directly returning JSONResponse with appropriate headers is easiest.
-                from fastapi.responses import Response
-                return Response(
-                    content=json_data, 
+                from fastapi.responses import StreamingResponse
+                
+                def json_chunk_generator():
+                    yield "["
+                    if cleaned_path.endswith('.xlsx'):
+                        df = pd.read_excel(cleaned_path)
+                        json_data = df.to_json(orient='records')
+                        yield json_data[1:-1]
+                    else:
+                        chunk_iter = pd.read_csv(cleaned_path, chunksize=10000)
+                        first_chunk = True
+                        for chunk in chunk_iter:
+                            if chunk.empty:
+                                continue
+                            json_chunk = chunk.to_json(orient='records')
+                            if json_chunk == "[]":
+                                continue
+                            if not first_chunk:
+                                yield ",\n"
+                            yield json_chunk[1:-1]
+                            first_chunk = False
+                    yield "]"
+
+                return StreamingResponse(
+                    json_chunk_generator(), 
                     media_type="application/json", 
                     headers={"Content-Disposition": f'attachment; filename="cleaned_{job_id}.json"'}
                 )
@@ -204,8 +220,8 @@ async def chat_with_agent(request: ChatRequest):
         raise HTTPException(status_code=404, detail="Belirtilen job_id için dosya bulunamadı.")
         
     try:
-        # Pandas ile oku
-        df = pd.read_csv(target_file)
+        # Pandas ile oku (OOM önlemi için ilk 10.000 satır alınır)
+        df = pd.read_csv(target_file, nrows=10000)
         
         # LangChain Agent oluştur (Dinamik LLM Seçimi)
         if openai_key and openai_key != "your-openai-api-key-here" and openai_key.strip():
