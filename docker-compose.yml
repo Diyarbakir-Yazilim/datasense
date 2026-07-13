@@ -1,11 +1,11 @@
 # ─── DataSense Docker Compose ────────────────────────────────────
-# Tam asenkron yapıyı (Backend, Worker, Redis, Frontend) başlatma
-# Kullanım: docker-compose up --build
+# Start fully async stack (Backend, Worker, Redis, Frontend)
+# Usage: docker-compose up --build
 
 version: "3.9"
 
 services:
-  # ─── Redis (Mesaj Kuyruğu & Sonuç Deposu) ─────────────────────
+  # ─── Redis (Message Queue & Result Backend) ─────────────────────
   redis:
     image: redis:7-alpine
     container_name: datasense_redis
@@ -46,7 +46,7 @@ services:
       - ./logs:/app/logs
     restart: unless-stopped
 
-  # ─── Celery Worker (Asenkron Görev İşleyici) ──────────────────
+  # ─── Celery Worker (Async Task Handler) ──────────────────
   worker:
     build:
       context: ./backend
@@ -72,7 +72,7 @@ services:
       - ./logs:/app/logs
     restart: unless-stopped
 
-  # ─── AI API (Veri/Karar Motoru) ────────────────────────────────
+  # ─── AI API (Data/Decision Engine) ────────────────────────────────
   ai_api:
     build:
       context: ./ai_api
@@ -100,7 +100,7 @@ services:
       - backend
     restart: unless-stopped
 
-  # ─── Yük Testi (Locust) ────────────────────────────────────────
+  # ─── Load Testing (Locust) ────────────────────────────────────────
   locust:
     image: locustio/locust
     container_name: datasense_locust
