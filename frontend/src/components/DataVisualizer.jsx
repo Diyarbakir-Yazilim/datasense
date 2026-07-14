@@ -6,7 +6,7 @@ export default function DataVisualizer({ data }) {
   if (!data?.chart_data) {
     return (
       <div className="glass-panel fade-in" style={{ marginTop: '24px', textAlign: 'center', padding: '40px' }}>
-        Grafik verisi bekleniyor veya oluşturulamadı...
+        Waiting for chart data or it could not be generated...
       </div>
     );
   }
@@ -65,7 +65,7 @@ export default function DataVisualizer({ data }) {
         textStyle: { color: 'rgba(255,255,255,0.7)' }
       },
       series: [{
-        name: 'Korelasyon',
+        name: 'Correlation',
         type: 'heatmap',
         data: heatmapData,
         label: { show: true, color: '#fff', fontSize: 10 },
@@ -90,7 +90,7 @@ export default function DataVisualizer({ data }) {
         legend: { show: false },
         series: [
           {
-            name: 'Dağılım',
+            name: 'Distribution',
             type: 'pie',
             radius: ['30%', '45%'],
             center: ['50%', '50%'],
@@ -168,29 +168,29 @@ export default function DataVisualizer({ data }) {
     <div className="glass-panel fade-in" style={{ marginTop: '24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
         <FiBarChart2 size={24} className="gradient-text" />
-        <h3 style={{ margin: 0 }}>Görselleştirme & Analiz</h3>
+        <h3 style={{ margin: 0 }}>Visualization & Analysis</h3>
       </div>
       
       <div className="dashboard-grid">
         <div style={{ 
           background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '24px', minHeight: '350px'
         }}>
-          <h4 style={{ color: 'var(--text-secondary)', marginBottom: '16px', textAlign: 'center' }}>Hedef Değişken Dağılımı</h4>
+          <h4 style={{ color: 'var(--text-secondary)', marginBottom: '16px', textAlign: 'center' }}>Target Variable Distribution</h4>
           {distOptions ? (
              <ReactECharts option={distOptions} style={{ height: '300px', width: '100%' }} />
           ) : (
-             <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: '50px' }}>Dağılım verisi oluşturulamadı.</p>
+             <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: '50px' }}>Distribution data could not be generated.</p>
           )}
         </div>
         
         <div style={{ 
           background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '24px', minHeight: '350px'
         }}>
-          <h4 style={{ color: 'var(--text-secondary)', marginBottom: '16px', textAlign: 'center' }}>Korelasyon Matrisi</h4>
+          <h4 style={{ color: 'var(--text-secondary)', marginBottom: '16px', textAlign: 'center' }}>Correlation Matrix</h4>
           {heatmapOptions ? (
              <ReactECharts option={heatmapOptions} style={{ height: '350px', width: '100%' }} />
           ) : (
-             <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: '50px' }}>Sayısal değişken bulunamadı.</p>
+             <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: '50px' }}>No numerical variable found.</p>
           )}
         </div>
 
@@ -200,7 +200,7 @@ export default function DataVisualizer({ data }) {
               gridColumn: '1 / -1'
            }}>
               <h4 style={{ color: 'var(--text-secondary)', marginBottom: '16px', textAlign: 'center' }}>
-                 Yüksek Korelasyon Göstergesi (r={scatter_plot.correlation})
+                 High Correlation Indicator (r={scatter_plot.correlation})
               </h4>
               <ReactECharts option={scatterOptions} style={{ height: '350px', width: '100%' }} />
            </div>

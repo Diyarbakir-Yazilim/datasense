@@ -42,13 +42,13 @@ export default function DecisionCard({ title, value, tagColor, onOverride }) {
             style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'center' }}
             onClick={() => setIsEditing(true)}
           >
-            <FiEdit2 /> Override (Manuel Düzenleme)
+            <FiEdit2 /> Override (Manual Edit)
           </button>
         </div>
       ) : (
         <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--warning-yellow)', fontSize: '0.85rem' }}>
-            <FiInfo /> <span>LLM kararını manuel olarak eziyorsunuz.</span>
+            <FiInfo /> <span>Overriding the LLM decision manually.</span>
           </div>
           <textarea 
             value={typeof editValue === 'object' ? JSON.stringify(editValue, null, 2) : editValue}
@@ -77,10 +77,10 @@ export default function DecisionCard({ title, value, tagColor, onOverride }) {
           />
           <div style={{ display: 'flex', gap: '10px' }}>
             <button className="btn btn-success" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={handleSave}>
-              <FiCheck /> Onayla
+              <FiCheck /> Confirm
             </button>
             <button className="btn btn-danger" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={handleCancel}>
-              <FiX /> İptal
+              <FiX /> Cancel
             </button>
           </div>
         </div>

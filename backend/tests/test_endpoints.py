@@ -7,7 +7,7 @@ def test_analyze_invalid_file(client):
         files={"file": ("test.txt", b"dummy content", "text/plain")}
     )
     assert response.status_code == 400
-    assert "Sadece CSV veya Excel dosyaları desteklenmektedir" in response.json()["detail"]
+    assert "Only CSV or Excel files are supported" in response.json()["detail"]
 
 @patch("app.api.v1.endpoints.analyze_dataset_task.apply_async")
 def test_analyze_valid_csv(mock_apply_async, client):
@@ -42,7 +42,7 @@ def test_get_task_status_pending(mock_async_result, client):
     assert response.status_code == 200
     json_resp = response.json()
     assert json_resp["state"] == "PENDING"
-    assert "sırada bekliyor" in json_resp["status"]
+    assert "waiting in queue" in json_resp["status"]
 
 # DOSYANIN EN ALTINA EKLEYEBİLİRSİNİZ:
 
